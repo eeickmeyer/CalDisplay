@@ -54,6 +54,11 @@ parts:
       - libproxy1v5
       - libb2-1
       - libxcb-util1
+      - qml6-module-qtquick-controls
+      - qml6-module-qtquick-layouts
+      - qml6-module-qtquick-window
+      - qml6-module-qtqml-workerscript
+      - qml6-module-qtquick-templates
     organize:
       usr/lib/x86_64-linux-gnu/libproxy/libpxbackend-1.0.so: usr/lib/x86_64-linux-gnu/libpxbackend-1.0.so
     prime:
@@ -98,9 +103,10 @@ apps:
     environment:
       QT_QUICK_BACKEND: software
       QT_QPA_PLATFORM: xcb
-      QT_DEBUG_PLUGINS: "1"
-      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
+      QT_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
+      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins/platforms
       QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+      QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
     plugs:
       - home
       - network
@@ -115,8 +121,10 @@ apps:
     environment:
       QT_QUICK_BACKEND: software
       QT_QPA_PLATFORM: xcb
-      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
+      QT_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
+      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins/platforms
       QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+      QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
     plugs:
       - home
       - network

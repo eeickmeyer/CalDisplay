@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=CalDisplay
+Comment=Family calendar dashboard
+Exec=/home/erich/Desktop/CalDisplay/build/CalDisplay
+Terminal=false
+Categories=Utility;
+X-LXQt-Need-Tray=false

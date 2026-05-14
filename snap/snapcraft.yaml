@@ -1,0 +1,126 @@
+name: caldisplay
+base: core24
+version: '1.0.0'
+summary: Family calendar and clock display
+title: CalDisplay
+description: |
+  A full-screen kiosk application for displaying family calendars
+  from ICS/webcal feeds. Perfect for wall-mounted displays.
+  
+  Features:
+  - Read-only calendar feed support (ICS, webcal)
+  - Real-time clock display
+  - Automatic periodic refresh
+  - Dual launch modes: full-screen kiosk and windowed configuration
+  - Optimized for low-power hardware (Lubuntu compatible)
+
+license: GPL-3.0-or-later
+contact: Erich Eickmeyer <eeickmeyer@ubuntu.com>
+website: https://ericheickmeyer.com
+donation: https://ubuntustudio.org/contribute
+issues: https://github.com/eeickmeyer/CalDisplay/issues
+source-code: https://github.com/eeickmeyer/CalDisplay
+
+confinement: strict
+grade: stable
+
+slots:
+  dbus-slot:
+    interface: dbus
+    bus: session
+    name: org.caldisplay.CalDisplay
+
+plugs:
+  dbus-plug:
+    interface: dbus
+    bus: session
+    name: org.caldisplay.CalDisplay
+
+parts:
+  qt6:
+    plugin: nil
+    stage-packages:
+      - libqt6core6
+      - libqt6gui6
+      - libqt6qml6
+      - libqt6quick6
+      - libqt6network6
+      - libqt6xml6
+      - libxkbcommon0
+      - libfontconfig1
+      - libx11-6
+      - libxext6
+      - libharfbuzz0b
+      - libproxy1v5
+      - libb2-1
+      - libxcb-util1
+    organize:
+      usr/lib/x86_64-linux-gnu/libproxy/libpxbackend-1.0.so: usr/lib/x86_64-linux-gnu/libpxbackend-1.0.so
+    prime:
+      - -usr/lib/**/libEGL_mesa.so*
+      - -usr/lib/**/libGLX_mesa.so*
+      - -usr/lib/**/libXext.so*
+      - -usr/lib/**/libXxf86vm.so*
+      - -usr/lib/**/libicuio.so*
+      - -usr/lib/**/libicutest.so*
+      - -usr/lib/**/libicutu.so*
+      - -usr/lib/**/libvulkan.so*
+      - -usr/lib/**/libwayland-client.so*
+      - -usr/share/doc
+      - -usr/share/man
+  
+  caldisplay:
+    plugin: cmake
+    source: .
+    after: [qt6]
+    build-packages:
+      - build-essential
+      - cmake
+      - qt6-base-dev
+      - qt6-declarative-dev
+    cmake-parameters:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/usr
+    organize:
+      usr/bin/CalDisplay: bin/CalDisplay
+      usr/share/CalDisplay/qml: share/CalDisplay/qml
+      usr/share/applications/caldisplay.desktop: share/applications/caldisplay.desktop
+    prime:
+      - bin/CalDisplay
+      - share/CalDisplay/qml
+      - share/applications/caldisplay.desktop
+      - -usr/share/doc
+      - -usr/share/man
+
+apps:
+  caldisplay:
+    command: bin/CalDisplay
+    environment:
+      QT_QUICK_BACKEND: software
+      QT_QPA_PLATFORM: xcb
+      QT_DEBUG_PLUGINS: "1"
+      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
+      QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+    plugs:
+      - home
+      - network
+      - network-bind
+      - opengl
+      - x11
+      - dbus-plug
+    desktop: share/applications/caldisplay.desktop
+  
+  caldisplay-windowed:
+    command: bin/CalDisplay --windowed
+    environment:
+      QT_QUICK_BACKEND: software
+      QT_QPA_PLATFORM: xcb
+      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
+      QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+    plugs:
+      - home
+      - network
+      - network-bind
+      - opengl
+      - x11
+      - dbus-plug

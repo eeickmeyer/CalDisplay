@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=CalDisplay
+Comment=Family calendar and clock display
+Icon=caldisplay
+Exec=CalDisplay
+Terminal=false
+Categories=Utility;Calendar;
+Keywords=calendar;family;kiosk;display;
+X-GNOME-Autostart-enabled=false

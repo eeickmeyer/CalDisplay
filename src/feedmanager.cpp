@@ -1,8 +1,20 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// CalDisplay - A calendar application for displaying events from shared ICS feeds
+// Copyright (C) 2026 Erich Eickmeyer
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
 #include "feedmanager.h"
 
 #include <algorithm>
 #include <QCoreApplication>
 #include <QDate>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -67,6 +79,107 @@ QString unfoldIcs(const QByteArray& data) {
     }
 
     return unfolded.join('\n');
+}
+
+void appendIcsEvents(const QByteArray& body,
+                     const QString& source,
+                     const QString& color,
+                     QList<CalendarEvent>* mergedEvents) {
+    const QString unfolded = unfoldIcs(body);
+    const QStringList lines = unfolded.split('\n', Qt::KeepEmptyParts);
+
+    bool inEvent = false;
+    QString summary;
+    QString dtStartRaw;
+    QString dtEndRaw;
+    QString status = QStringLiteral("CONFIRMED");
+
+    for (const QString& originalLine : lines) {
+        const QString line = originalLine.trimmed();
+        if (line == "BEGIN:VEVENT") {
+            inEvent = true;
+            summary.clear();
+            dtStartRaw.clear();
+            dtEndRaw.clear();
+            status = QStringLiteral("CONFIRMED");
+            continue;
+        }
+
+        if (line == "END:VEVENT") {
+            if (inEvent) {
+                CalendarEvent ev;
+                ev.title = summary.isEmpty() ? QStringLiteral("(No title)") : summary;
+                ev.calendar = source;
+                ev.color = color;
+                ev.start = parseIcsDateTime(dtStartRaw);
+                ev.end = parseIcsDateTime(dtEndRaw);
+                ev.status = status;
+                if (!ev.start.isValid()) {
+                    inEvent = false;
+                    continue;
+                }
+                if (!ev.end.isValid() || ev.end < ev.start) {
+                    ev.end = ev.start.addSecs(60 * 60);
+                }
+                mergedEvents->append(ev);
+            }
+            inEvent = false;
+            continue;
+        }
+
+        if (!inEvent) {
+            continue;
+        }
+
+        const int colon = line.indexOf(':');
+        if (colon <= 0) {
+            continue;
+        }
+
+        QString key = line.left(colon).trimmed().toUpper();
+        const QString value = line.mid(colon + 1).trimmed();
+
+        const int semi = key.indexOf(';');
+        if (semi > 0) {
+            key = key.left(semi);
+        }
+
+        if (key == "SUMMARY") {
+            summary = value;
+        } else if (key == "DTSTART") {
+            dtStartRaw = value;
+        } else if (key == "DTEND") {
+            dtEndRaw = value;
+        } else if (key == "STATUS") {
+            status = value.toUpper();
+        }
+    }
+}
+
+QString localFeedPathFromInput(QString input) {
+    input = input.trimmed();
+    if (input.isEmpty()) {
+        return {};
+    }
+
+    if (input.startsWith("file://", Qt::CaseInsensitive)) {
+        return QUrl(input).toLocalFile();
+    }
+
+    if (input.startsWith("~/")) {
+        input.replace(0, 1, QDir::homePath());
+    }
+
+    const QUrl parsed = QUrl::fromUserInput(input);
+    if (parsed.isLocalFile()) {
+        return parsed.toLocalFile();
+    }
+
+    if (QFileInfo::exists(input)) {
+        return QFileInfo(input).absoluteFilePath();
+    }
+
+    return {};
 }
 }
 
@@ -272,6 +385,29 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         const QString source = customName.isEmpty() ? sourceNameFromUrl(urlText) : customName;
         const QString color = colorForSource(source);
 
+        const QString localPath = localFeedPathFromInput(urlText);
+        if (!localPath.isEmpty()) {
+            QFile file(localPath);
+            if (!file.open(QIODevice::ReadOnly)) {
+                (*networkErrorFeeds)++;
+                (*pending)--;
+                finalize();
+                continue;
+            }
+
+            const QByteArray body = file.readAll();
+            const QString bodyPrefix = QString::fromUtf8(body.left(4096));
+            if (!bodyPrefix.contains("BEGIN:VCALENDAR", Qt::CaseInsensitive)) {
+                (*nonCalendarFeeds)++;
+            } else {
+                appendIcsEvents(body, source, color, mergedEvents.data());
+            }
+
+            (*pending)--;
+            finalize();
+            continue;
+        }
+
         QNetworkRequest request(url);
         request.setHeader(QNetworkRequest::UserAgentHeader, "CalDisplay/0.1");
 
@@ -301,75 +437,7 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
                 if (!looksLikeIcs) {
                     (*nonCalendarFeeds)++;
                 } else {
-                const QString unfolded = unfoldIcs(body);
-                const QStringList lines = unfolded.split('\n', Qt::KeepEmptyParts);
-
-                bool inEvent = false;
-                QString summary;
-                QString dtStartRaw;
-                QString dtEndRaw;
-                QString status = QStringLiteral("CONFIRMED");
-
-                for (const QString& originalLine : lines) {
-                    const QString line = originalLine.trimmed();
-                    if (line == "BEGIN:VEVENT") {
-                        inEvent = true;
-                        summary.clear();
-                        dtStartRaw.clear();
-                        dtEndRaw.clear();
-                        status = QStringLiteral("CONFIRMED");
-                        continue;
-                    }
-
-                    if (line == "END:VEVENT") {
-                        if (inEvent) {
-                            CalendarEvent ev;
-                            ev.title = summary.isEmpty() ? QStringLiteral("(No title)") : summary;
-                            ev.calendar = source;
-                            ev.color = color;
-                            ev.start = parseIcsDateTime(dtStartRaw);
-                            ev.end = parseIcsDateTime(dtEndRaw);
-                            ev.status = status;
-                            if (!ev.start.isValid()) {
-                                inEvent = false;
-                                continue;
-                            }
-                            if (!ev.end.isValid() || ev.end < ev.start) {
-                                ev.end = ev.start.addSecs(60 * 60);
-                            }
-                            mergedEvents->append(ev);
-                        }
-                        inEvent = false;
-                        continue;
-                    }
-
-                    if (!inEvent) {
-                        continue;
-                    }
-
-                    const int colon = line.indexOf(':');
-                    if (colon <= 0) {
-                        continue;
-                    }
-
-                    QString key = line.left(colon).trimmed().toUpper();
-                    const QString value = line.mid(colon + 1).trimmed();
-
-                    const int semi = key.indexOf(';');
-                    if (semi > 0) {
-                        key = key.left(semi);
-                    }
-
-                    if (key == "SUMMARY") {
-                        summary = value;
-                    } else if (key == "DTSTART") {
-                        dtStartRaw = value;
-                    } else if (key == "DTEND") {
-                        dtEndRaw = value;
-                    } else if (key == "STATUS") {
-                        status = value.toUpper();
-                    }
-                }
+                    appendIcsEvents(body, source, color, mergedEvents.data());
                 }
             }
 

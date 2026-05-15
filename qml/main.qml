@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// CalDisplay - A calendar application for displaying events from shared ICS feeds
+// Copyright (C) 2026 Erich Eickmeyer
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
 import QtQuick 2.15
 import QtQuick.Window 2.15
 import QtQuick.Controls 2.15
@@ -1312,7 +1321,7 @@ Window {
                 Button { text: "Close"; onClicked: root.setupOpen = false }
             }
 
-            Label { text: "Use shared ICS/webcal links."; color: root.ncMutedText; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Label { text: "Use shared ICS/webcal links or local .ics files."; color: root.ncMutedText; wrapMode: Text.WordWrap; Layout.fillWidth: true }
             Label { text: "Calendars (Name | URL)"; color: root.ncText }
 
             ScrollView {
@@ -1332,7 +1341,7 @@ Window {
                             onTextEdited: feedListModel.setProperty(index, "name", text)
                         }
                         TextField {
-                            text: model.url; placeholderText: "webcal:// or https://..."
+                            text: model.url; placeholderText: "webcal://, https://, /path/file.ics, or file:///..."
                             Layout.fillWidth: true
                             onTextEdited: feedListModel.setProperty(index, "url", text)
                         }
@@ -1457,82 +1466,6 @@ Window {
                 Text {
                     id: roStatusText; anchors.fill: parent; anchors.margins: 8
                     text: feedManager.statusMessage; color: root.ncMutedText; wrapMode: Text.WordWrap; font.pixelSize: 16
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; height: 1; color: root.ncBorder }
-
-            Label { text: "Optional advanced: Nextcloud account discovery"; color: root.ncSubtleText; font.bold: true }
-            Label { text: "Server URL"; color: root.ncText }
-            TextField {
-                id: serverField; text: accountManager.serverUrl
-                placeholderText: "https://cloud.example.com/remote.php/dav/"
-                Layout.fillWidth: true; onEditingFinished: accountManager.serverUrl = text
-            }
-            Label { text: "Username"; color: root.ncText }
-            TextField {
-                id: userField; text: accountManager.username; placeholderText: "nextcloud-user"
-                Layout.fillWidth: true; onEditingFinished: accountManager.username = text
-            }
-            Label { text: "App password"; color: root.ncText }
-            TextField {
-                id: passField; text: accountManager.password; echoMode: TextInput.Password
-                placeholderText: "Nextcloud app password"
-                Layout.fillWidth: true; onEditingFinished: accountManager.password = text
-            }
-
-            RowLayout {
-                Layout.fillWidth: true; spacing: 10
-                Button {
-                    text: "Save"; enabled: !accountManager.busy
-                    onClicked: {
-                        accountManager.serverUrl = serverField.text; accountManager.username = userField.text
-                        accountManager.password = passField.text; accountManager.saveSettings()
-                    }
-                }
-                Button {
-                    text: accountManager.busy ? "Connecting..." : "Test & Discover"; enabled: !accountManager.busy
-                    onClicked: {
-                        accountManager.serverUrl = serverField.text; accountManager.username = userField.text
-                        accountManager.password = passField.text; accountManager.saveSettings()
-                        accountManager.discoverCalendars()
-                    }
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true; color: root.ncPanel; radius: 8
-                border.width: 1; border.color: root.ncBorder
-                implicitHeight: statusText.implicitHeight + 16
-                Text {
-                    id: statusText; anchors.fill: parent; anchors.margins: 8
-                    text: accountManager.statusMessage; color: root.ncMutedText; wrapMode: Text.WordWrap; font.pixelSize: 16
-                }
-            }
-
-            Label { text: "Discovered calendars"; color: root.ncText; font.bold: true }
-
-            Rectangle {
-                Layout.fillWidth: true; Layout.fillHeight: true
-                color: root.ncPanel; radius: 10; border.width: 1; border.color: root.ncBorder
-                ListView {
-                    id: calList; anchors.fill: parent; anchors.margins: 8; clip: true
-                    model: accountManager.availableCalendars
-                    delegate: Rectangle {
-                        width: calList.width; height: 42; radius: 6
-                        color: index % 2 === 0 ? "#1a344a" : "#142a3d"
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left; anchors.leftMargin: 10
-                            text: modelData; color: root.ncText; font.pixelSize: 17
-                            elide: Text.ElideRight; width: parent.width - 20
-                        }
-                    }
-                    Text {
-                        anchors.centerIn: parent
-                        visible: accountManager.availableCalendars.length === 0 && !accountManager.busy
-                        text: "No calendars yet"; color: root.ncSubtleText; font.pixelSize: 16
-                    }
                 }
             }
         }

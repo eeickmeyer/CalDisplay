@@ -1,3 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// CalDisplay - A calendar application for displaying events from shared ICS feeds
+// Copyright (C) 2026 Erich Eickmeyer
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -5,7 +14,6 @@
 #include <QStandardPaths>
 #include <QFileInfo>
 
-#include "accountmanager.h"
 #include "eventmodel.h"
 #include "feedmanager.h"
 
@@ -21,12 +29,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    AccountManager accountManager;
     EventModel model;
     FeedManager feedManager(&model);
 
     QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty("accountManager", &accountManager);
     engine.rootContext()->setContextProperty("eventModel", &model);
     engine.rootContext()->setContextProperty("feedManager", &feedManager);
     engine.rootContext()->setContextProperty("windowedMode", windowed);

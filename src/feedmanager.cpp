@@ -203,7 +203,8 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         filtered.reserve(mergedEvents->size());
 
         const QDateTime now = QDateTime::currentDateTime();
-        const QDateTime oldest = now.addDays(-2);
+        const QDate today = now.date();
+        const QDateTime oldest = QDateTime(QDate(today.year(), today.month(), 1).addMonths(-1), QTime(0, 0));
         const QDateTime newest = now.addDays(60);
 
         for (const CalendarEvent& ev : *mergedEvents) {

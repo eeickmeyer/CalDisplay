@@ -486,8 +486,11 @@ Window {
         }
 
         // ── StackLayout: three views ──────────────────────────────
-        StackLayout {
+        Item {
             Layout.fillWidth: true; Layout.fillHeight: true
+
+        StackLayout {
+            anchors.fill: parent
             currentIndex: root.currentView
 
             // ── Day view ──────────────────────────────────────────
@@ -1257,6 +1260,7 @@ Window {
                 }
             }
         }
+        } // Item wrapper for StackLayout
 
         // Footer
         RowLayout {
@@ -1313,7 +1317,7 @@ Window {
 
             ScrollView {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(feedListView.contentHeight + 10, 220)
+                Layout.preferredHeight: Math.min(feedListModel.count * 54 + 10, 220)
                 clip: true
                 ListView {
                     id: feedListView

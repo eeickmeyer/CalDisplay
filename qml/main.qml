@@ -32,6 +32,14 @@ Window {
     readonly property string ncText: "#f3f8fc"
     readonly property string ncMutedText: "#c6d8e7"
     readonly property string ncSubtleText: "#8eaac2"
+    readonly property int eventAllDayTextSize: 16
+    readonly property int eventListTimeTextSize: 16
+    readonly property int eventListTitleTextSize: 22
+    readonly property int eventListMetaTextSize: 15
+    readonly property int timelineEventTitleTextSize: 16
+    readonly property int timelineEventMetaTextSize: 13
+    readonly property int monthChipTextSize: 13
+    readonly property int compactMonthChipTextSize: 12
     readonly property var weekdayNames: feedManager.sundayFirst
         ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
         : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -601,7 +609,7 @@ Window {
                                         model: dayViewPanel.dayAllDayEvents
                                         delegate: Rectangle {
                                             Layout.fillWidth: true
-                                            implicitHeight: 28
+                                            implicitHeight: 34
                                             radius: 6
                                             color: "#1a344a"
                                             border.width: 1
@@ -616,7 +624,7 @@ Window {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: modelData.title
                                                     color: root.ncText
-                                                    font.pixelSize: 13
+                                                    font.pixelSize: root.eventAllDayTextSize
                                                     font.bold: true
                                                     elide: Text.ElideRight
                                                     width: parent.width - 10
@@ -639,7 +647,7 @@ Window {
 
                                     delegate: Rectangle {
                                         width: ListView.view.width
-                                        height: 74
+                                        height: 88
                                         radius: 10
                                         color: "#1a344a"
                                         border.width: root.isTentativeEvent(modelData) ? 2 : 1
@@ -666,7 +674,7 @@ Window {
                                                     text: root.formatEventTime(new Date(modelData.startMs)) + " - " +
                                                         root.formatEventTime(new Date(modelData.endMs))
                                                     color: "#9fd7f1"
-                                                    font.pixelSize: 14
+                                                    font.pixelSize: root.eventListTimeTextSize
                                                     font.bold: true
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
@@ -675,7 +683,7 @@ Window {
                                                 Text {
                                                     text: (root.isTentativeEvent(modelData) ? "! " : "") + modelData.title
                                                     color: root.ncText
-                                                    font.pixelSize: 18
+                                                    font.pixelSize: root.eventListTitleTextSize
                                                     font.bold: true
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
@@ -684,7 +692,7 @@ Window {
                                                 Text {
                                                     text: modelData.calendar + (root.isTentativeEvent(modelData) ? " (Tentative)" : "")
                                                     color: root.ncMutedText
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: root.eventListMetaTextSize
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
                                                 }
@@ -812,7 +820,7 @@ Window {
                                                             Text {
                                                                 text: (root.isTentativeEvent(modelData.event) ? "! " : "") + modelData.event.title
                                                                 color: root.ncText
-                                                                font.pixelSize: 14
+                                                                font.pixelSize: root.timelineEventTitleTextSize
                                                                 font.bold: true
                                                                 elide: Text.ElideRight
                                                                 width: parent.width
@@ -822,7 +830,7 @@ Window {
                                                                 text: root.formatEventTime(new Date(modelData.event.startMs)) + " - " +
                                                                       root.formatEventTime(new Date(modelData.event.endMs))
                                                                 color: root.ncMutedText
-                                                                font.pixelSize: 12
+                                                                font.pixelSize: root.timelineEventMetaTextSize
                                                             }
                                                         }
                                                     }
@@ -906,7 +914,7 @@ Window {
 
                     Item {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 28
+                        Layout.preferredHeight: 36
 
                         Row {
                             anchors.fill: parent
@@ -952,7 +960,7 @@ Window {
                                                 text: firstAllDayEvent
                                                     ? (firstAllDayEvent.title + (allDayEvents.length > 1 ? ("  +" + (allDayEvents.length - 1)) : ""))
                                                     : ""
-                                                font.pixelSize: 10
+                                                font.pixelSize: root.timelineEventMetaTextSize
                                                 color: root.ncMutedText
                                                 elide: Text.ElideRight
                                                 width: parent.width - 5
@@ -1067,7 +1075,7 @@ Window {
                                                             Text {
                                                                 text: (root.isTentativeEvent(modelData.event) ? "! " : "") + modelData.event.title
                                                                 color: root.ncText
-                                                                font.pixelSize: 12
+                                                                font.pixelSize: root.timelineEventTitleTextSize
                                                                 font.bold: true
                                                                 elide: Text.ElideRight
                                                                 width: parent.width
@@ -1075,7 +1083,7 @@ Window {
                                                             Text {
                                                                 text: root.formatEventTime(new Date(modelData.event.startMs))
                                                                 color: root.ncMutedText
-                                                                font.pixelSize: 10
+                                                                font.pixelSize: root.timelineEventMetaTextSize
                                                             }
                                                         }
                                                     }
@@ -1154,7 +1162,7 @@ Window {
                                     Repeater {
                                         model: dayEvents.slice(0, 3)
                                         delegate: Rectangle {
-                                            Layout.fillWidth: true; height: 16; radius: 2; clip: true
+                                            Layout.fillWidth: true; height: 20; radius: 3; clip: true
                                             color: "#1a344a"
                                             opacity: root.isTentativeEvent(modelData) ? 0.65 : 1.0
                                             border.width: root.isTentativeEvent(modelData) ? 1 : 0
@@ -1166,7 +1174,7 @@ Window {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     leftPadding: 3
                                                     text: (root.isTentativeEvent(modelData) ? "! " : "") + root.monthChipText(modelData)
-                                                    font.pixelSize: 11; color: root.ncMutedText
+                                                    font.pixelSize: root.monthChipTextSize; color: root.ncMutedText
                                                     elide: Text.ElideRight; width: parent.width - 5
                                                 }
                                             }
@@ -1255,7 +1263,7 @@ Window {
                                                 Repeater {
                                                     model: dayEvents.slice(0, 2)
                                                     delegate: Rectangle {
-                                                        Layout.fillWidth: true; height: 16; radius: 2; clip: true
+                                                        Layout.fillWidth: true; height: 18; radius: 3; clip: true
                                                         color: "#1a344a"
                                                         opacity: root.isTentativeEvent(modelData) ? 0.65 : 1.0
                                                         border.width: root.isTentativeEvent(modelData) ? 1 : 0
@@ -1267,7 +1275,7 @@ Window {
                                                                 anchors.verticalCenter: parent.verticalCenter
                                                                 leftPadding: 3
                                                                 text: (root.isTentativeEvent(modelData) ? "! " : "") + root.monthChipText(modelData)
-                                                                font.pixelSize: 10; color: root.ncMutedText
+                                                                font.pixelSize: root.compactMonthChipTextSize; color: root.ncMutedText
                                                                 elide: Text.ElideRight; width: parent.width - 5
                                                             }
                                                         }

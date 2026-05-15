@@ -10,6 +10,7 @@ struct CalendarEvent {
     QString color;
     QDateTime start;
     QDateTime end;
+    QString status = QStringLiteral("CONFIRMED");
 };
 
 class EventModel : public QAbstractListModel {

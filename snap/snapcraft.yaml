@@ -1,10 +1,11 @@
 name: caldisplay
 base: core24
 version: '1.0.0'
+icon: assets/caldisplay.svg
 summary: Family calendar and clock display
 title: CalDisplay
 description: |
-  A full-screen kiosk application for displaying family calendars
+  A calendar and clock application for displaying family calendars
   from ICS/webcal feeds. Perfect for wall-mounted displays.
   
   Features:
@@ -90,38 +91,19 @@ parts:
       usr/bin/CalDisplay: bin/CalDisplay
       usr/share/CalDisplay/qml: share/CalDisplay/qml
       usr/share/applications/caldisplay.desktop: share/applications/caldisplay.desktop
+      usr/share/applications/caldisplay-windowed.desktop: share/applications/caldisplay-windowed.desktop
       usr/share/icons/hicolor/scalable/apps/caldisplay.svg: share/icons/hicolor/scalable/apps/caldisplay.svg
     prime:
       - bin/CalDisplay
       - share/CalDisplay/qml
       - share/applications/caldisplay.desktop
+      - share/applications/caldisplay-windowed.desktop
       - share/icons/hicolor/scalable/apps/caldisplay.svg
       - -usr/share/doc
       - -usr/share/man
 
 apps:
   caldisplay:
-    command: bin/CalDisplay
-    daemon: simple
-    daemon-scope: user
-    environment:
-      QT_QUICK_BACKEND: software
-      QT_QPA_PLATFORM: xcb
-      QT_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
-      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins/platforms
-      QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
-      QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
-      DBUS_FATAL_WARNINGS: "0"
-    plugs:
-      - home
-      - network
-      - network-bind
-      - opengl
-      - x11
-      - dbus-plug
-    desktop: share/applications/caldisplay.desktop
-  
-  caldisplay-windowed:
     command: bin/CalDisplay --windowed
     environment:
       QT_QUICK_BACKEND: software
@@ -138,3 +120,23 @@ apps:
       - opengl
       - x11
       - dbus-plug
+    desktop: share/applications/caldisplay-windowed.desktop
+
+  caldisplay-kiosk:
+    command: bin/CalDisplay
+    environment:
+      QT_QUICK_BACKEND: software
+      QT_QPA_PLATFORM: xcb
+      QT_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins
+      QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins/platforms
+      QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+      QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+      DBUS_FATAL_WARNINGS: "0"
+    plugs:
+      - home
+      - network
+      - network-bind
+      - opengl
+      - x11
+      - dbus-plug
+    desktop: share/applications/caldisplay.desktop

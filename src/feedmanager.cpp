@@ -84,6 +84,9 @@ QString FeedManager::statusMessage() const { return m_statusMessage; }
 bool FeedManager::busy() const { return m_busy; }
 bool FeedManager::autoRefreshEnabled() const { return m_autoRefreshEnabled; }
 int FeedManager::refreshIntervalMinutes() const { return m_refreshIntervalMinutes; }
+int FeedManager::timeFormatPreference() const { return m_timeFormatPreference; }
+bool FeedManager::sundayFirst() const { return m_sundayFirst; }
+QString FeedManager::displayName() const { return m_displayName; }
 
 QString FeedManager::lastSync() const {
     if (!m_lastSync.isValid()) {
@@ -119,13 +122,42 @@ void FeedManager::setRefreshIntervalMinutes(int value) {
     updateAutoRefreshTimer();
 }
 
+void FeedManager::setTimeFormatPreference(int value) {
+    const int clamped = std::clamp(value, 0, 2);
+    if (m_timeFormatPreference == clamped) {
+        return;
+    }
+    m_timeFormatPreference = clamped;
+    emit timeFormatPreferenceChanged();
+}
+
+void FeedManager::setSundayFirst(bool value) {
+    if (m_sundayFirst == value) {
+        return;
+    }
+    m_sundayFirst = value;
+    emit sundayFirstChanged();
+}
+
+void FeedManager::setDisplayName(const QString& value) {
+    const QString normalized = value.trimmed().isEmpty() ? QStringLiteral("Family Calendar") : value.trimmed();
+    if (m_displayName == normalized) {
+        return;
+    }
+    m_displayName = normalized;
+    emit displayNameChanged();
+}
+
 void FeedManager::saveSettings() {
     QSettings settings;
     settings.setValue("readonly/feedUrls", m_feedUrls);
     settings.setValue("readonly/autoRefreshEnabled", m_autoRefreshEnabled);
     settings.setValue("readonly/refreshIntervalMinutes", m_refreshIntervalMinutes);
+    settings.setValue("readonly/timeFormatPreference", m_timeFormatPreference);
+    settings.setValue("readonly/sundayFirst", m_sundayFirst);
+    settings.setValue("readonly/displayName", m_displayName);
     settings.sync();
-    setStatusMessage("Read-only settings saved.");
+    setStatusMessage("Settings saved.");
 }
 
 void FeedManager::refreshFeeds() {
@@ -147,13 +179,22 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
 
     setBusy(true);
     if (interactive) {
-        setStatusMessage("Refreshing read-only calendar feeds...");
+        setStatusMessage("Refreshing calendar feeds...");
     }
 
     auto pending = QSharedPointer<int>::create(entries.size());
     auto mergedEvents = QSharedPointer<QList<CalendarEvent>>::create();
+    auto unauthorizedFeeds = QSharedPointer<int>::create(0);
+    auto nonCalendarFeeds = QSharedPointer<int>::create(0);
+    auto networkErrorFeeds = QSharedPointer<int>::create(0);
 
-    auto finalize = [this, pending, mergedEvents, entryCount = (int)entries.size()]() {
+    auto finalize = [this,
+                     pending,
+                     mergedEvents,
+                     unauthorizedFeeds,
+                     nonCalendarFeeds,
+                     networkErrorFeeds,
+                     entryCount = (int)entries.size()]() {
         if (*pending != 0) {
             return;
         }
@@ -182,9 +223,20 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         m_lastSync = QDateTime::currentDateTime();
         emit lastSyncChanged();
 
-        setStatusMessage(QString("Loaded %1 event(s) from %2 read-only feed(s).")
-                             .arg(filtered.size())
-                             .arg(entryCount));
+        QString message = QString("Loaded %1 event(s) from %2 feed(s).")
+                              .arg(filtered.size())
+                              .arg(entryCount);
+        if (*unauthorizedFeeds > 0) {
+            message += QString(" %1 feed(s) require authentication.").arg(*unauthorizedFeeds);
+        }
+        if (*nonCalendarFeeds > 0) {
+            message += QString(" %1 feed(s) were not calendar ICS.").arg(*nonCalendarFeeds);
+        }
+        if (*networkErrorFeeds > 0) {
+            message += QString(" %1 feed(s) had network errors.").arg(*networkErrorFeeds);
+        }
+
+        setStatusMessage(message);
         setBusy(false);
     };
 
@@ -223,9 +275,31 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         request.setHeader(QNetworkRequest::UserAgentHeader, "CalDisplay/0.1");
 
         QNetworkReply* reply = m_nam->get(request);
-        connect(reply, &QNetworkReply::finished, this, [this, reply, pending, mergedEvents, source, color, finalize]() {
-            if (reply->error() == QNetworkReply::NoError) {
-                const QByteArray body = reply->readAll();
+        connect(reply, &QNetworkReply::finished, this, [this,
+                                                        reply,
+                                                        pending,
+                                                        mergedEvents,
+                                                        source,
+                                                        color,
+                                                        unauthorizedFeeds,
+                                                        nonCalendarFeeds,
+                                                        networkErrorFeeds,
+                                                        finalize]() {
+            const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const QByteArray body = reply->readAll();
+            const QString contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString().toLower();
+            const QString bodyPrefix = QString::fromUtf8(body.left(4096));
+
+            if (statusCode == 401 || statusCode == 403) {
+                (*unauthorizedFeeds)++;
+            } else if (reply->error() != QNetworkReply::NoError) {
+                (*networkErrorFeeds)++;
+            } else {
+                const bool looksLikeIcs = contentType.contains("text/calendar")
+                    || bodyPrefix.contains("BEGIN:VCALENDAR", Qt::CaseInsensitive);
+                if (!looksLikeIcs) {
+                    (*nonCalendarFeeds)++;
+                } else {
                 const QString unfolded = unfoldIcs(body);
                 const QStringList lines = unfolded.split('\n', Qt::KeepEmptyParts);
 
@@ -233,6 +307,7 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
                 QString summary;
                 QString dtStartRaw;
                 QString dtEndRaw;
+                QString status = QStringLiteral("CONFIRMED");
 
                 for (const QString& originalLine : lines) {
                     const QString line = originalLine.trimmed();
@@ -241,6 +316,7 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
                         summary.clear();
                         dtStartRaw.clear();
                         dtEndRaw.clear();
+                        status = QStringLiteral("CONFIRMED");
                         continue;
                     }
 
@@ -252,6 +328,7 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
                             ev.color = color;
                             ev.start = parseIcsDateTime(dtStartRaw);
                             ev.end = parseIcsDateTime(dtEndRaw);
+                            ev.status = status;
                             if (!ev.start.isValid()) {
                                 inEvent = false;
                                 continue;
@@ -288,7 +365,10 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
                         dtStartRaw = value;
                     } else if (key == "DTEND") {
                         dtEndRaw = value;
+                    } else if (key == "STATUS") {
+                        status = value.toUpper();
                     }
+                }
                 }
             }
 
@@ -306,12 +386,21 @@ void FeedManager::loadSettings() {
     m_feedUrls = settings.value("readonly/feedUrls").toString();
     m_autoRefreshEnabled = settings.value("readonly/autoRefreshEnabled", true).toBool();
     m_refreshIntervalMinutes = std::clamp(settings.value("readonly/refreshIntervalMinutes", 5).toInt(), 1, 180);
+    m_timeFormatPreference = std::clamp(settings.value("readonly/timeFormatPreference", 0).toInt(), 0, 2);
+    m_sundayFirst = settings.value("readonly/sundayFirst", false).toBool();
+    m_displayName = settings.value("readonly/displayName", QStringLiteral("Family Calendar")).toString().trimmed();
+    if (m_displayName.isEmpty()) {
+        m_displayName = QStringLiteral("Family Calendar");
+    }
 
     emit feedUrlsChanged();
     emit autoRefreshEnabledChanged();
     emit refreshIntervalMinutesChanged();
+    emit timeFormatPreferenceChanged();
+    emit sundayFirstChanged();
+    emit displayNameChanged();
 
-    setStatusMessage("Read-only mode: add shared ICS links.");
+    setStatusMessage("Add shared ICS links.");
     updateAutoRefreshTimer();
 
     if (!normalizedUrlList().isEmpty()) {
@@ -385,7 +474,8 @@ QStringList FeedManager::normalizedUrlList() const {
 
 QString FeedManager::colorForSource(const QString& source) const {
     static const QStringList palette = {
-        "#2f855a", "#2b6cb0", "#d69e2e", "#c53030", "#6b46c1", "#0f766e", "#b45309", "#7c3aed"
+        "#0082c9", "#2daee0", "#4cb9c5", "#66bb6a",
+        "#f4b13d", "#f28c38", "#e35d6a", "#9c6ade"
     };
     const uint hash = qHash(source.toLower());
     return palette.at(static_cast<int>(hash % palette.size()));

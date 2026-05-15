@@ -83,6 +83,7 @@ QVariantList EventModel::getEvents() const {
         m["color"]   = ev.color;
         m["startMs"] = ev.start.toMSecsSinceEpoch();
         m["endMs"]   = ev.end.toMSecsSinceEpoch();
+        m["status"]  = ev.status;
         result.append(m);
     }
     return result;
@@ -106,6 +107,20 @@ void EventModel::loadSampleData() {
 
     m_events = {
         {
+            "All-day family outing",
+            "Family",
+            "#f97316",
+            QDateTime(today, QTime(0, 0)),
+            QDateTime(today.addDays(1), QTime(0, 0))
+        },
+        {
+            "Morning planning",
+            "Work",
+            "#2daee0",
+            QDateTime(today, QTime(7, 15)),
+            QDateTime(today, QTime(7, 45))
+        },
+        {
             "School drop-off",
             "Family",
             "#2f855a",
@@ -120,11 +135,81 @@ void EventModel::loadSampleData() {
             QDateTime(today, QTime(10, 30))
         },
         {
+            "Team standup",
+            "Work",
+            "#0082c9",
+            QDateTime(today, QTime(10, 0)),
+            QDateTime(today, QTime(10, 30))
+        },
+        {
+            "Project review",
+            "Work",
+            "#9c6ade",
+            QDateTime(today, QTime(10, 15)),
+            QDateTime(today, QTime(11, 0))
+        },
+        {
+            "Lunch break",
+            "Personal",
+            "#4cb9c5",
+            QDateTime(today, QTime(12, 0)),
+            QDateTime(today, QTime(12, 45))
+        },
+        {
+            "Errands",
+            "House",
+            "#f4b13d",
+            QDateTime(today, QTime(14, 0)),
+            QDateTime(today, QTime(15, 15))
+        },
+        {
+            "Kids pickup",
+            "Family",
+            "#66bb6a",
+            QDateTime(today, QTime(15, 30)),
+            QDateTime(today, QTime(16, 0))
+        },
+        {
             "Groceries",
             "House",
             "#d69e2e",
             QDateTime(today, QTime(17, 15)),
             QDateTime(today, QTime(18, 0))
+        },
+        {
+            "Workout",
+            "Health",
+            "#e35d6a",
+            QDateTime(today, QTime(18, 30)),
+            QDateTime(today, QTime(19, 15))
+        },
+        {
+            "Call with parents",
+            "Family",
+            "#7c3aed",
+            QDateTime(today, QTime(19, 0)),
+            QDateTime(today, QTime(19, 30))
+        },
+        {
+            "Tomorrow prep",
+            "Personal",
+            "#0f766e",
+            QDateTime(today, QTime(20, 0)),
+            QDateTime(today, QTime(20, 30))
+        },
+        {
+            "Yesterday follow-up",
+            "Work",
+            "#2daee0",
+            QDateTime(today.addDays(-1), QTime(16, 15)),
+            QDateTime(today.addDays(-1), QTime(17, 0))
+        },
+        {
+            "Past due admin",
+            "House",
+            "#b45309",
+            QDateTime(today.addDays(-1), QTime(18, 45)),
+            QDateTime(today.addDays(-1), QTime(19, 15))
         },
         {
             "Soccer practice",
@@ -139,6 +224,14 @@ void EventModel::loadSampleData() {
             "#6b46c1",
             QDateTime(today.addDays(2), QTime(19, 0)),
             QDateTime(today.addDays(2), QTime(21, 0))
+        },
+        {
+            "Coffee with Alex",
+            "Personal",
+            "#ec4899",
+            QDateTime(today, QTime(14, 30)),
+            QDateTime(today, QTime(15, 30)),
+            QStringLiteral("TENTATIVE")
         }
     };
 }

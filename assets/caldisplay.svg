@@ -1,44 +1,71 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
     <style>
-      .bg { fill: #0f1720; }
-      .border { fill: #2d3748; }
-      .accent { fill: #4fd1c5; }
-      .grid { stroke: #2d3748; stroke-width: 2; fill: none; }
-      .text { fill: #f7fafc; font-family: monospace; font-size: 16px; font-weight: bold; }
+      .calendar-main { fill: #3b82f6; }
+      .calendar-accent { fill: #06b6d4; }
+      .calendar-text { fill: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 600; }
+      .clock-hand { stroke: #f8fafc; stroke-width: 2.5; stroke-linecap: round; }
+      .clock-center { fill: #f8fafc; }
     </style>
   </defs>
 
-  <!-- Background -->
-  <rect width="256" height="256" class="bg"/>
+  <!-- Background gradient -->
+  <rect width="256" height="256" fill="url(#bgGradient)"/>
 
-  <!-- Outer border -->
-  <rect x="8" y="8" width="240" height="240" rx="12" ry="12" class="border" stroke-width="2"/>
+  <!-- Main calendar card -->
+  <g filter="url(#shadow)">
+    <rect x="20" y="20" width="216" height="216" rx="16" ry="16" class="calendar-main"/>
+  </g>
 
-  <!-- Calendar grid -->
-  <g class="grid">
-    <!-- Header bar -->
-    <rect x="16" y="16" width="224" height="40" rx="8" ry="8"/>
+  <!-- Calendar header with date info -->
+  <rect x="28" y="28" width="200" height="48" rx="12" fill="#ffffff" opacity="0.15"/>
+  <text x="128" y="52" class="calendar-text" text-anchor="middle" font-size="18">MAY</text>
+  <text x="128" y="68" class="calendar-text" text-anchor="middle" font-size="12" opacity="0.9">Family Calendar</text>
+
+  <!-- Calendar grid - simplified days representation -->
+  <g opacity="0.85">
+    <!-- Row 1 -->
+    <circle cx="48" cy="100" r="8" class="calendar-accent"/>
+    <circle cx="100" cy="100" r="8" fill="#ffffff" opacity="0.3"/>
+    <circle cx="152" cy="100" r="8" fill="#ffffff" opacity="0.3"/>
     
-    <!-- Calendar rows (3x3 grid of days) -->
-    <rect x="16" y="60" width="224" height="40" rx="4" ry="4"/>
-    <rect x="16" y="104" width="224" height="40" rx="4" ry="4"/>
-    <rect x="16" y="148" width="224" height="40" rx="4" ry="4"/>
-    <rect x="16" y="192" width="224" height="40" rx="4" ry="4"/>
+    <!-- Row 2 -->
+    <circle cx="48" cy="135" r="8" fill="#ffffff" opacity="0.3"/>
+    <circle cx="100" cy="135" r="8" class="calendar-accent"/>
+    <circle cx="152" cy="135" r="8" fill="#ffffff" opacity="0.3"/>
+    
+    <!-- Row 3 -->
+    <circle cx="48" cy="170" r="8" fill="#ffffff" opacity="0.3"/>
+    <circle cx="100" cy="170" r="8" fill="#ffffff" opacity="0.3"/>
+    <circle cx="152" cy="170" r="8" class="calendar-accent"/>
   </g>
 
-  <!-- Accent elements (simulating event highlights) -->
-  <circle cx="80" cy="180" r="12" class="accent" opacity="0.7"/>
-  <circle cx="176" cy="76" r="12" class="accent" opacity="0.7"/>
-
-  <!-- Clock symbol (center) -->
-  <g transform="translate(128, 220)">
-    <circle cx="0" cy="0" r="16" class="accent" opacity="0.5"/>
-    <line x1="0" y1="-12" x2="0" y2="0" stroke="#f7fafc" stroke-width="2" stroke-linecap="round"/>
-    <line x1="0" y1="0" x2="8" y2="0" stroke="#f7fafc" stroke-width="2" stroke-linecap="round"/>
+  <!-- Clock overlay (bottom right) -->
+  <g transform="translate(188, 188)" filter="url(#shadow)">
+    <!-- Clock circle -->
+    <circle cx="0" cy="0" r="28" fill="#06b6d4" opacity="0.95"/>
+    
+    <!-- Hour markers -->
+    <circle cx="0" cy="-22" r="1.5" class="clock-center"/>
+    <circle cx="22" cy="0" r="1.5" class="clock-center"/>
+    <circle cx="0" cy="22" r="1.5" class="clock-center"/>
+    <circle cx="-22" cy="0" r="1.5" class="clock-center"/>
+    
+    <!-- Hour hand (10) -->
+    <line x1="0" y1="0" x2="-8" y2="-12" class="clock-hand"/>
+    
+    <!-- Minute hand (2) -->
+    <line x1="0" y1="0" x2="15" y2="-8" class="clock-hand"/>
+    
+    <!-- Center dot -->
+    <circle cx="0" cy="0" r="3" class="clock-center"/>
   </g>
-
-  <!-- Family calendar text hint (top) -->
-  <text x="128" y="35" class="text" text-anchor="middle" font-size="14">Family</text>
 </svg>

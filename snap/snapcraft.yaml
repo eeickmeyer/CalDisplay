@@ -46,6 +46,7 @@ parts:
       - libqt6qml6
       - libqt6quick6
       - libqt6network6
+      - libqt6widgets6
       - libqt6xml6
       - libxkbcommon0
       - libfontconfig1
@@ -118,6 +119,7 @@ apps:
       - network
       - network-bind
       - opengl
+      - removable-media
       - x11
       - dbus-plug
     desktop: share/applications/caldisplay-windowed.desktop
@@ -137,6 +139,7 @@ apps:
       - network
       - network-bind
       - opengl
+      - removable-media
       - x11
       - dbus-plug
     desktop: share/applications/caldisplay.desktop

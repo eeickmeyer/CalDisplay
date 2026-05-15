@@ -14,6 +14,7 @@
 #include <QDate>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -275,6 +276,13 @@ void FeedManager::saveSettings() {
 
 void FeedManager::refreshFeeds() {
     refreshFeedsInternal(true);
+}
+
+QString FeedManager::pickLocalIcsFile() const {
+    return QFileDialog::getOpenFileName(nullptr,
+                                        tr("Choose an ICS file"),
+                                        QDir::homePath(),
+                                        tr("Calendar files (*.ics);;All files (*)"));
 }
 
 void FeedManager::refreshFeedsInternal(bool interactive) {

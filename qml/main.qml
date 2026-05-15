@@ -359,6 +359,26 @@ Window {
         return lines.join('\n')
     }
 
+    function feedNameFromLocation(location) {
+        var value = (location || "").trim()
+        if (!value)
+            return ""
+
+        if (value.indexOf("file://") === 0)
+            value = value.substring(7)
+
+        value = value.replace(/\\/g, "/")
+        var slash = value.lastIndexOf("/")
+        var name = slash >= 0 ? value.substring(slash + 1) : value
+        try {
+            name = decodeURIComponent(name)
+        } catch (err) {
+        }
+        if (name.toLowerCase().endsWith(".ics"))
+            name = name.substring(0, name.length - 4)
+        return name
+    }
+
     onSetupOpenChanged: { if (setupOpen) populateFeedList(); else { viewCycleTimer.restart(); startCycle() } }
     onCurrentViewChanged: {
         if (currentView === 0) {
@@ -1344,6 +1364,22 @@ Window {
                             text: model.url; placeholderText: "webcal://, https://, /path/file.ics, or file:///..."
                             Layout.fillWidth: true
                             onTextEdited: feedListModel.setProperty(index, "url", text)
+                        }
+                        Button {
+                            text: "Browse"
+                            onClicked: {
+                                var selectedPath = feedManager.pickLocalIcsFile()
+                                if (!selectedPath)
+                                    return
+
+                                feedListModel.setProperty(index, "url", selectedPath)
+                                var currentItem = feedListModel.get(index)
+                                var currentName = (currentItem.name || "").trim()
+                                if (!currentName) {
+                                    var name = root.feedNameFromLocation(selectedPath)
+                                    feedListModel.setProperty(index, "name", name)
+                                }
+                            }
                         }
                         Button {
                             text: "✕"; implicitWidth: 36

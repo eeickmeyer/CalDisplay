@@ -14,11 +14,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 QUIET COMPONENTS Core Gui Qml Quick Network Xml)
+find_package(Qt6 QUIET COMPONENTS Core Gui Qml Quick Network Xml Widgets)
 if (Qt6_FOUND)
     set(QT_PACKAGE Qt6)
 else()
-    find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Network Xml)
+    find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Network Xml Widgets)
     set(QT_PACKAGE Qt5)
 endif()
 
@@ -36,6 +36,7 @@ target_link_libraries(CalDisplay PRIVATE
     ${QT_PACKAGE}::Network
     ${QT_PACKAGE}::Qml
     ${QT_PACKAGE}::Quick
+    ${QT_PACKAGE}::Widgets
     ${QT_PACKAGE}::Xml
 )
 

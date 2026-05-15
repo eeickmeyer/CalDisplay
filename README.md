@@ -50,6 +50,12 @@ Install local snap:
 sudo snap install --dangerous ./caldisplay_1.0.0_amd64.snap
 ```
 
+Allow browsing removable media with the native file picker:
+
+```bash
+sudo snap connect caldisplay:removable-media
+```
+
 Run windowed mode (default app command):
 
 ```bash

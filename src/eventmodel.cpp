@@ -74,6 +74,20 @@ void EventModel::manualRefresh() {
     refreshDerivedState();
 }
 
+QVariantList EventModel::getEvents() const {
+    QVariantList result;
+    for (const CalendarEvent& ev : m_events) {
+        QVariantMap m;
+        m["title"]   = ev.title;
+        m["calendar"] = ev.calendar;
+        m["color"]   = ev.color;
+        m["startMs"] = ev.start.toMSecsSinceEpoch();
+        m["endMs"]   = ev.end.toMSecsSinceEpoch();
+        result.append(m);
+    }
+    return result;
+}
+
 QString EventModel::lastUpdated() const {
     return QLocale().toString(m_lastUpdated, "ddd yyyy-MM-dd HH:mm:ss");
 }

@@ -90,16 +90,20 @@ parts:
       usr/bin/CalDisplay: bin/CalDisplay
       usr/share/CalDisplay/qml: share/CalDisplay/qml
       usr/share/applications/caldisplay.desktop: share/applications/caldisplay.desktop
+      usr/share/icons/hicolor/scalable/apps/caldisplay.svg: share/icons/hicolor/scalable/apps/caldisplay.svg
     prime:
       - bin/CalDisplay
       - share/CalDisplay/qml
       - share/applications/caldisplay.desktop
+      - share/icons/hicolor/scalable/apps/caldisplay.svg
       - -usr/share/doc
       - -usr/share/man
 
 apps:
   caldisplay:
     command: bin/CalDisplay
+    daemon: simple
+    daemon-scope: user
     environment:
       QT_QUICK_BACKEND: software
       QT_QPA_PLATFORM: xcb
@@ -107,6 +111,7 @@ apps:
       QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins/platforms
       QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
       QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+      DBUS_FATAL_WARNINGS: "0"
     plugs:
       - home
       - network
@@ -125,6 +130,7 @@ apps:
       QT_QPA_PLATFORM_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/plugins/platforms
       QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
       QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
+      DBUS_FATAL_WARNINGS: "0"
     plugs:
       - home
       - network

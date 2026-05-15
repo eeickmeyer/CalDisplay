@@ -59,6 +59,7 @@ private:
     void updateAutoRefreshTimer();
     void refreshFeedsInternal(bool interactive);
 
+    QStringList normalizedEntryList() const;
     QStringList normalizedUrlList() const;
     QString colorForSource(const QString& source) const;
     QString sourceNameFromUrl(const QString& url) const;

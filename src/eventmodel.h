@@ -36,6 +36,7 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     Q_INVOKABLE void manualRefresh();
+    Q_INVOKABLE QVariantList getEvents() const;
     QString lastUpdated() const;
     void setExternalEvents(const QList<CalendarEvent>& events);
 

@@ -6,6 +6,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QSharedPointer>
 #include <QSettings>
 #include <QTimer>
@@ -136,8 +137,8 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         return;
     }
 
-    const QStringList urls = normalizedUrlList();
-    if (urls.isEmpty()) {
+    const QStringList entries = normalizedEntryList();
+    if (entries.isEmpty()) {
         if (interactive) {
             setStatusMessage("Add one or more ICS/webcal links first.");
         }
@@ -149,10 +150,10 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         setStatusMessage("Refreshing read-only calendar feeds...");
     }
 
-    auto pending = QSharedPointer<int>::create(urls.size());
+    auto pending = QSharedPointer<int>::create(entries.size());
     auto mergedEvents = QSharedPointer<QList<CalendarEvent>>::create();
 
-    auto finalize = [this, pending, mergedEvents, urls]() {
+    auto finalize = [this, pending, mergedEvents, entryCount = (int)entries.size()]() {
         if (*pending != 0) {
             return;
         }
@@ -183,14 +184,29 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
 
         setStatusMessage(QString("Loaded %1 event(s) from %2 read-only feed(s).")
                              .arg(filtered.size())
-                             .arg(urls.size()));
+                             .arg(entryCount));
         setBusy(false);
     };
 
-    for (const QString& rawUrl : urls) {
-        QString urlText = rawUrl;
+    for (const QString& rawEntry : entries) {
+        const int entryPipe = rawEntry.indexOf('|');
+        const QString customName = entryPipe > 0 ? rawEntry.left(entryPipe).trimmed() : QString();
+        QString urlText = entryPipe > 0 ? rawEntry.mid(entryPipe + 1).trimmed() : rawEntry.trimmed();
         if (urlText.startsWith("webcal://", Qt::CaseInsensitive)) {
             urlText.replace(0, 9, "https://");
+        }
+        // Convert Nextcloud public calendar web UI link to ICS export URL
+        // e.g. https://host/index.php/apps/calendar/p/<TOKEN>
+        //   -> https://host/remote.php/dav/public-calendars/<TOKEN>?export
+        static const QRegularExpression ncShareRe(
+            R"(^(https?://[^/]+)/index\.php/apps/calendar/p/([^/?#]+))",
+            QRegularExpression::CaseInsensitiveOption);
+        QRegularExpressionMatch ncMatch = ncShareRe.match(urlText);
+        if (ncMatch.hasMatch()) {
+            urlText = ncMatch.captured(1)
+                      + "/remote.php/dav/public-calendars/"
+                      + ncMatch.captured(2)
+                      + "?export";
         }
 
         const QUrl url(urlText);
@@ -200,18 +216,18 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
             continue;
         }
 
+        const QString source = customName.isEmpty() ? sourceNameFromUrl(urlText) : customName;
+        const QString color = colorForSource(source);
+
         QNetworkRequest request(url);
         request.setHeader(QNetworkRequest::UserAgentHeader, "CalDisplay/0.1");
 
         QNetworkReply* reply = m_nam->get(request);
-        connect(reply, &QNetworkReply::finished, this, [this, reply, pending, mergedEvents, rawUrl, finalize]() {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, pending, mergedEvents, source, color, finalize]() {
             if (reply->error() == QNetworkReply::NoError) {
                 const QByteArray body = reply->readAll();
                 const QString unfolded = unfoldIcs(body);
                 const QStringList lines = unfolded.split('\n', Qt::KeepEmptyParts);
-
-                const QString source = sourceNameFromUrl(rawUrl);
-                const QString color = colorForSource(source);
 
                 bool inEvent = false;
                 QString summary;
@@ -340,7 +356,7 @@ void FeedManager::updateAutoRefreshTimer() {
     m_autoRefreshTimer.start();
 }
 
-QStringList FeedManager::normalizedUrlList() const {
+QStringList FeedManager::normalizedEntryList() const {
     QStringList parts = m_feedUrls.split('\n', Qt::SkipEmptyParts);
     QStringList result;
     result.reserve(parts.size());
@@ -349,6 +365,18 @@ QStringList FeedManager::normalizedUrlList() const {
         p = p.trimmed();
         if (!p.isEmpty()) {
             result.append(p);
+        }
+    }
+    return result;
+}
+
+QStringList FeedManager::normalizedUrlList() const {
+    QStringList result;
+    for (const QString& entry : normalizedEntryList()) {
+        const int pipe = entry.indexOf('|');
+        QString url = pipe > 0 ? entry.mid(pipe + 1).trimmed() : entry;
+        if (!url.isEmpty()) {
+            result.append(url);
         }
     }
     result.removeDuplicates();

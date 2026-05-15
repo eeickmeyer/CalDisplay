@@ -22,6 +22,7 @@
 #include <QRegularExpression>
 #include <QSharedPointer>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
 
@@ -30,6 +31,14 @@
 namespace {
 constexpr const char* kOrg = "CalDisplay";
 constexpr const char* kApp = "CalDisplay";
+
+QString settingsFilePath() {
+    const QByteArray snapUserData = qgetenv("SNAP_USER_DATA");
+    if (!snapUserData.isEmpty()) {
+        return QString::fromLocal8Bit(snapUserData) + QStringLiteral("/CalDisplay.conf");
+    }
+    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + QStringLiteral("/CalDisplay.conf");
+}
 
 QDateTime parseIcsDateTime(const QString& rawValue) {
     QString value = rawValue.trimmed();
@@ -263,7 +272,9 @@ void FeedManager::setDisplayName(const QString& value) {
 }
 
 void FeedManager::saveSettings() {
-    QSettings settings;
+    const QString filePath = settingsFilePath();
+    QDir().mkpath(QFileInfo(filePath).absolutePath());
+    QSettings settings(filePath, QSettings::IniFormat);
     settings.setValue("readonly/feedUrls", m_feedUrls);
     settings.setValue("readonly/autoRefreshEnabled", m_autoRefreshEnabled);
     settings.setValue("readonly/refreshIntervalMinutes", m_refreshIntervalMinutes);
@@ -271,7 +282,7 @@ void FeedManager::saveSettings() {
     settings.setValue("readonly/sundayFirst", m_sundayFirst);
     settings.setValue("readonly/displayName", m_displayName);
     settings.sync();
-    setStatusMessage("Settings saved.");
+    setStatusMessage(QStringLiteral("Settings saved."));
 }
 
 void FeedManager::refreshFeeds() {
@@ -459,7 +470,8 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
 }
 
 void FeedManager::loadSettings() {
-    QSettings settings;
+    const QString filePath = settingsFilePath();
+    QSettings settings(filePath, QSettings::IniFormat);
     m_feedUrls = settings.value("readonly/feedUrls").toString();
     m_autoRefreshEnabled = settings.value("readonly/autoRefreshEnabled", true).toBool();
     m_refreshIntervalMinutes = std::clamp(settings.value("readonly/refreshIntervalMinutes", 5).toInt(), 1, 180);

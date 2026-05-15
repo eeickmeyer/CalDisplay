@@ -16,7 +16,7 @@ description: |
   - Optimized for low-power hardware (Lubuntu compatible)
 
 license: GPL-3.0-or-later
-contact: Erich Eickmeyer <eeickmeyer@ubuntu.com>
+contact: eeickmeyer@ubuntu.com
 website: https://ericheickmeyer.com
 donation: https://ubuntustudio.org/contribute
 issues: https://github.com/eeickmeyer/CalDisplay/issues
@@ -24,18 +24,6 @@ source-code: https://github.com/eeickmeyer/CalDisplay
 
 confinement: strict
 grade: stable
-
-slots:
-  dbus-slot:
-    interface: dbus
-    bus: session
-    name: org.caldisplay.CalDisplay
-
-plugs:
-  dbus-plug:
-    interface: dbus
-    bus: session
-    name: org.caldisplay.CalDisplay
 
 parts:
   qt6:
@@ -47,7 +35,6 @@ parts:
       - libqt6quick6
       - libqt6network6
       - libqt6widgets6
-      - libqt6xml6
       - libxkbcommon0
       - libfontconfig1
       - libx11-6
@@ -121,7 +108,6 @@ apps:
       - opengl
       - removable-media
       - x11
-      - dbus-plug
     desktop: share/applications/caldisplay-windowed.desktop
 
   caldisplay-kiosk:
@@ -141,5 +127,4 @@ apps:
       - opengl
       - removable-media
       - x11
-      - dbus-plug
     desktop: share/applications/caldisplay.desktop

@@ -25,6 +25,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QTimeZone>
 #include <QUrl>
 
 #include "eventmodel.h"

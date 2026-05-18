@@ -34,6 +34,7 @@ parts:
       - libqt6qml6
       - libqt6quick6
       - libqt6network6
+      - libqt6svg6
       - libqt6widgets6
       - papirus-icon-theme
       - libxkbcommon0
@@ -74,6 +75,7 @@ parts:
       - cmake
       - qt6-base-dev
       - qt6-declarative-dev
+      - qt6-svg-dev
     cmake-parameters:
       - -DCMAKE_BUILD_TYPE=Release
       - -DCMAKE_INSTALL_PREFIX=/usr
@@ -88,6 +90,7 @@ parts:
       - share/CalDisplay/qml
       - usr/share/caldisplay/desktop/caldisplay.desktop
       - usr/share/caldisplay/desktop/caldisplay-kiosk.desktop
+      - -usr/share/**/caldisplay-windowed.desktop
       - share/icons/hicolor/scalable/apps/caldisplay.svg
       - -usr/share/doc
       - -usr/share/man

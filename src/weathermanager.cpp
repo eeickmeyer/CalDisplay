@@ -32,6 +32,9 @@
 #include <QFileInfo>
 #include <QPixmap>
 #include <QDirIterator>
+#include <QImage>
+#include <QPainter>
+#include <QSvgRenderer>
 
 // ── Anonymous namespace helpers ───────────────────────────────────────────────
 namespace {
@@ -55,6 +58,26 @@ int ji(const QJsonObject& obj, const QString& key, int defaultVal = 0) {
 }
 QString js(const QJsonObject& obj, const QString& key) {
     return obj.value(key).toString();
+}
+
+QString renderSvgToCachedPng(const QString& svgPath, const QString& cachePath, int size) {
+    if (svgPath.isEmpty() || cachePath.isEmpty() || size <= 0)
+        return QString();
+
+    QSvgRenderer renderer(svgPath);
+    if (!renderer.isValid())
+        return QString();
+
+    QImage image(size, size, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    renderer.render(&painter);
+    painter.end();
+
+    if (image.save(cachePath, "PNG"))
+        return QUrl::fromLocalFile(cachePath).toString();
+
+    return QString();
 }
 
 } // namespace
@@ -183,8 +206,17 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
         for (const QString& rel : relDirs) {
             for (const QString& ext : exts) {
                 const QString candidate = root + QStringLiteral("/") + rel + QStringLiteral("/") + iconName + ext;
-                if (QFileInfo::exists(candidate))
-                    return QUrl::fromLocalFile(candidate).toString();
+                if (!QFileInfo::exists(candidate))
+                    continue;
+
+                if (ext == QStringLiteral(".svg")) {
+                    const QString rendered = renderSvgToCachedPng(candidate, cachePath, size);
+                    if (!rendered.isEmpty())
+                        return rendered;
+                    continue;
+                }
+
+                return QUrl::fromLocalFile(candidate).toString();
             }
         }
     }

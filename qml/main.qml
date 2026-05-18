@@ -1342,7 +1342,7 @@ Window {
                 visible: !weatherManager.configured
                 spacing: 12
                 Image {
-                    source: "image://theme/weather-none-available"
+                    source: ""
                     sourceSize.width: 72; sourceSize.height: 72
                     fillMode: Image.PreserveAspectFit
                     Layout.preferredWidth: 72; Layout.preferredHeight: 72
@@ -1378,7 +1378,7 @@ Window {
                             RowLayout {
                                 spacing: 8
                                 Image {
-                                    source: "image://theme/" + (weatherManager.currentWeather.icon || "weather-none-available")
+                                    source: weatherManager.currentWeather.iconPath || ""
                                     sourceSize.width: 52; sourceSize.height: 52
                                     fillMode: Image.PreserveAspectFit
                                     Layout.preferredWidth: 52; Layout.preferredHeight: 52
@@ -1426,7 +1426,7 @@ Window {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
                                     Text { text: modelData.timeText; color: root.ncSubtleText; font.pixelSize: 14; Layout.preferredWidth: 46 }
                                     Image {
-                                        source: "image://theme/" + (modelData.icon || "weather-none-available")
+                                        source: modelData.iconPath || ""
                                         sourceSize.width: 18; sourceSize.height: 18
                                         fillMode: Image.PreserveAspectFit
                                         Layout.preferredWidth: 18; Layout.preferredHeight: 18
@@ -1453,15 +1453,20 @@ Window {
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 16; spacing: 6
                         Text { text: "Extended Forecast"; color: root.ncMutedText; font.pixelSize: 18; font.bold: true; Layout.bottomMargin: 4 }
-                        Repeater {
+                        ListView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            spacing: 6
                             model: weatherManager.dailyForecast
-                            delegate: Item {
-                                Layout.fillWidth: true; Layout.fillHeight: true
-                                Rectangle { width: parent.width; height: 1; color: root.ncBorder; visible: index > 0 }
+                            delegate: Rectangle {
+                                width: ListView.view.width
+                                height: 46
+                                color: "transparent"
+                                border.width: 0
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 4; anchors.rightMargin: 4
-                                    anchors.topMargin: index > 0 ? 2 : 0
                                     spacing: 10
                                     Text {
                                         text: modelData.dayName
@@ -1470,7 +1475,7 @@ Window {
                                         Layout.preferredWidth: 90
                                     }
                                     Image {
-                                        source: "image://theme/" + (modelData.icon || "weather-none-available")
+                                        source: modelData.iconPath || ""
                                         sourceSize.width: 22; sourceSize.height: 22
                                         fillMode: Image.PreserveAspectFit
                                         Layout.preferredWidth: 22; Layout.preferredHeight: 22

@@ -169,6 +169,7 @@ private:
     static QString windDirText(int degrees);
     static int     owmIdToWmo(int id);
     static QString settingsFilePath();
+    static QString iconPathForName(const QString& iconName, int size);
 
     QString fmtTemp(double celsius) const;
     QString fmtWind(double kmh) const;

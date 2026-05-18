@@ -28,6 +28,9 @@
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QIcon>
+#include <QFileInfo>
+#include <QPixmap>
 
 // ── Anonymous namespace helpers ───────────────────────────────────────────────
 namespace {
@@ -132,6 +135,38 @@ int WeatherManager::owmIdToWmo(int id) {
 
 QString WeatherManager::settingsFilePath() {
     return weatherSettingsFilePath();
+}
+
+QString WeatherManager::iconPathForName(const QString& iconName, int size) {
+    if (iconName.isEmpty() || size <= 0)
+        return QString();
+
+    const QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                              + QStringLiteral("/weather-icons");
+    QDir().mkpath(cacheRoot);
+
+    const QString cachePath = cacheRoot
+                              + QStringLiteral("/")
+                              + iconName
+                              + QStringLiteral("-")
+                              + QString::number(size)
+                              + QStringLiteral(".png");
+
+    if (QFileInfo::exists(cachePath))
+        return cachePath;
+
+    const QIcon icon = QIcon::fromTheme(iconName);
+    if (icon.isNull())
+        return QString();
+
+    const QPixmap pixmap = icon.pixmap(size, size);
+    if (pixmap.isNull())
+        return QString();
+
+    if (pixmap.save(cachePath, "PNG"))
+        return cachePath;
+
+    return QString();
 }
 
 QString WeatherManager::fmtTemp(double celsius) const {
@@ -701,6 +736,7 @@ void WeatherManager::buildWeatherData() {
     QVariantMap cur;
     if (m_rawCurrent.valid) {
         cur[QStringLiteral("icon")]         = wmoIcon(m_rawCurrent.code);
+        cur[QStringLiteral("iconPath")]     = iconPathForName(wmoIcon(m_rawCurrent.code), 64);
         cur[QStringLiteral("description")]  = wmoDescription(m_rawCurrent.code);
         cur[QStringLiteral("tempStr")]      = fmtTemp(m_rawCurrent.temp);
         cur[QStringLiteral("feelsLikeStr")] = fmtTemp(m_rawCurrent.feelsLike);
@@ -719,6 +755,7 @@ void WeatherManager::buildWeatherData() {
         const QTime t(h.hour, 0);
         item[QStringLiteral("timeText")]  = t.toString(QStringLiteral("HH:00"));
         item[QStringLiteral("icon")]      = wmoIcon(h.code);
+        item[QStringLiteral("iconPath")]  = iconPathForName(wmoIcon(h.code), 32);
         item[QStringLiteral("tempStr")]   = fmtTemp(h.temp);
         item[QStringLiteral("precipProb")] = h.precipProb;
         item[QStringLiteral("code")]      = h.code;
@@ -742,6 +779,7 @@ void WeatherManager::buildWeatherData() {
         item[QStringLiteral("dayName")]    = dayName;
         item[QStringLiteral("dateStr")]    = d.date.toString(QStringLiteral("MMM d"));
         item[QStringLiteral("icon")]       = wmoIcon(d.code);
+        item[QStringLiteral("iconPath")]   = iconPathForName(wmoIcon(d.code), 32);
         item[QStringLiteral("description")] = wmoDescription(d.code);
         item[QStringLiteral("tempMaxStr")] = fmtTemp(d.tempMax);
         item[QStringLiteral("tempMinStr")] = fmtTemp(d.tempMin);

@@ -8,11 +8,13 @@
 // (at your option) any later version.
 
 #include <QApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QFileInfo>
+#include <QStringList>
 
 #include "eventmodel.h"
 #include "feedmanager.h"
@@ -29,6 +31,15 @@ int main(int argc, char* argv[]) {
             break;
         }
     }
+
+    QStringList iconSearchPaths;
+    iconSearchPaths << QStringLiteral("/usr/share/icons");
+    const QByteArray iconSnap = qgetenv("SNAP");
+    if (!iconSnap.isEmpty())
+        iconSearchPaths.prepend(QString::fromLocal8Bit(iconSnap) + QStringLiteral("/usr/share/icons"));
+    QIcon::setThemeSearchPaths(iconSearchPaths);
+    QIcon::setThemeName(QStringLiteral("Papirus"));
+    QIcon::setFallbackThemeName(QStringLiteral("hicolor"));
 
     EventModel model;
     FeedManager feedManager(&model);

@@ -183,8 +183,10 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
     if (iconName.isEmpty() || size <= 0)
         return QString();
 
+    // Use a versioned cache subdir so any previously-cached symbolic icons are
+    // not served again after we switched to always-colour lookups.
     const QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
-                              + QStringLiteral("/weather-icons");
+                              + QStringLiteral("/weather-icons-color");
     QDir().mkpath(cacheRoot);
 
     const QString cachePath = cacheRoot
@@ -197,46 +199,45 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
     if (QFileInfo::exists(cachePath))
         return QUrl::fromLocalFile(cachePath).toString();
 
-    const QIcon icon = QIcon::fromTheme(iconName);
-    if (!icon.isNull()) {
-        const QPixmap pixmap = icon.pixmap(size, size);
-        if (!pixmap.isNull() && pixmap.save(cachePath, "PNG"))
-            return QUrl::fromLocalFile(cachePath).toString();
-    }
-
-    // Fallback: direct lookup in Papirus icon directories when theme engine cannot render.
+    // Prefer Papirus colour icons (48x48/status) before falling back to the
+    // system theme engine, which often resolves to symbolic panel variants.
     QStringList roots;
     const QByteArray snap = qgetenv("SNAP");
     if (!snap.isEmpty())
         roots << (QString::fromLocal8Bit(snap) + QStringLiteral("/usr/share/icons/Papirus"));
     roots << QStringLiteral("/usr/share/icons/Papirus");
 
-    const QStringList relDirs = {
+    // Only search colour-context directories; skip panel/symbolic ones.
+    const QStringList colorDirs = {
         QStringLiteral("48x48/status"),
-        QStringLiteral("24x24/panel"),
-        QStringLiteral("16x16/panel"),
         QStringLiteral("scalable/status"),
-        QStringLiteral("scalable/panel")
     };
     const QStringList exts = { QStringLiteral(".png"), QStringLiteral(".xpm"), QStringLiteral(".svg") };
 
     for (const QString& root : roots) {
-        for (const QString& rel : relDirs) {
+        for (const QString& rel : colorDirs) {
             for (const QString& ext : exts) {
-                const QString candidate = root + QStringLiteral("/") + rel + QStringLiteral("/") + iconName + ext;
+                const QString candidate = root + QStringLiteral("/") + rel
+                                          + QStringLiteral("/") + iconName + ext;
                 if (!QFileInfo::exists(candidate))
                     continue;
-
                 if (ext == QStringLiteral(".svg")) {
                     const QString rendered = renderSvgToCachedPng(candidate, cachePath, size);
                     if (!rendered.isEmpty())
                         return rendered;
                     continue;
                 }
-
                 return QUrl::fromLocalFile(candidate).toString();
             }
         }
+    }
+
+    // Theme-engine last resort (Hicolor or whatever the desktop has configured).
+    const QIcon icon = QIcon::fromTheme(iconName);
+    if (!icon.isNull()) {
+        const QPixmap pixmap = icon.pixmap(size, size);
+        if (!pixmap.isNull() && pixmap.save(cachePath, "PNG"))
+            return QUrl::fromLocalFile(cachePath).toString();
     }
 
     return QString();
@@ -837,7 +838,12 @@ void WeatherManager::buildWeatherData() {
         item[QStringLiteral("iconPath")]  = iconPathForName(wmoIcon(h.code), 32);
         item[QStringLiteral("tempStr")]   = fmtTemp(h.temp);
         item[QStringLiteral("precipProb")] = h.precipProb;
-        item[QStringLiteral("precipType")] = precipTypeFromCode(h.code);
+        {
+            QString pt = precipTypeFromCode(h.code);
+            if (pt.isEmpty() && h.precipProb > 0)
+                pt = QStringLiteral("Rain");
+            item[QStringLiteral("precipType")] = pt;
+        }
         item[QStringLiteral("code")]      = h.code;
         hourly.append(item);
     }
@@ -864,7 +870,12 @@ void WeatherManager::buildWeatherData() {
         item[QStringLiteral("tempMaxStr")] = fmtTemp(d.tempMax);
         item[QStringLiteral("tempMinStr")] = fmtTemp(d.tempMin);
         item[QStringLiteral("precipProb")] = d.precipProb;
-        item[QStringLiteral("precipType")] = precipTypeFromCode(d.code);
+        {
+            QString pt = precipTypeFromCode(d.code);
+            if (pt.isEmpty() && d.precipProb > 0)
+                pt = QStringLiteral("Rain");
+            item[QStringLiteral("precipType")] = pt;
+        }
         item[QStringLiteral("sunrise")]    = d.sunrise;
         item[QStringLiteral("sunset")]     = d.sunset;
         item[QStringLiteral("code")]       = d.code;
@@ -1087,6 +1098,11 @@ void WeatherManager::parseNOAADaily(const QByteArray& data) {
             dd.code    = wmoCode;
         } else {
             dd.tempMin = qMin(dd.tempMin, tempC);
+            // Upgrade the day's code when night carries a precipitation event
+            // that the daytime period missed (e.g. "Overcast" day + "Slight Chance
+            // Rain" night).  Only upgrade – never downgrade a rain day to cloudy.
+            if (wmoCode >= 51 && dd.code < 51)
+                dd.code = wmoCode;
         }
         dd.precipProb = qMax(dd.precipProb, precipProb);
     }

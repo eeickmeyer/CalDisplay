@@ -1594,15 +1594,21 @@ Window {
                                         horizontalAlignment: Text.AlignRight
                                     }
                                     Text {
-                                        text: modelData.precipProb > 0 
-                                              ? (modelData.precipType ? modelData.precipType + " " : "") + modelData.precipProb + "%"
-                                              : "-"
+                                        text: modelData.precipProb > 0 && modelData.precipType ? modelData.precipType : ""
                                         color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
                                         font.pixelSize: parent.parent.parent.parent.baseFontSize * 0.85
-                                        Layout.preferredWidth: 110
-                                        Layout.minimumWidth: 110
+                                        Layout.preferredWidth: 60
+                                        Layout.minimumWidth: 60
                                         horizontalAlignment: Text.AlignRight
                                         elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        text: modelData.precipProb > 0 ? modelData.precipProb + "%" : "-"
+                                        color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
+                                        font.pixelSize: parent.parent.parent.parent.baseFontSize * 0.85
+                                        Layout.preferredWidth: 52
+                                        Layout.minimumWidth: 52
+                                        horizontalAlignment: Text.AlignRight
                                     }
                                 }
                             }

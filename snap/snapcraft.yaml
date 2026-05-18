@@ -60,6 +60,7 @@ parts:
       - -usr/lib/**/libicutu.so*
       - -usr/lib/**/libvulkan.so*
       - -usr/lib/**/libwayland-client.so*
+      - -usr/share/applications
       - -usr/share/doc
       - -usr/share/man
   
@@ -78,14 +79,14 @@ parts:
     organize:
       usr/bin/CalDisplay: bin/CalDisplay
       usr/share/CalDisplay/qml: share/CalDisplay/qml
-      usr/share/applications/caldisplay.desktop: share/applications/caldisplay.desktop
-      usr/share/applications/caldisplay-windowed.desktop: share/applications/caldisplay-windowed.desktop
+      usr/share/applications/caldisplay.desktop: usr/share/caldisplay/desktop/caldisplay.desktop
+      usr/share/applications/caldisplay-windowed.desktop: usr/share/caldisplay/desktop/caldisplay-windowed.desktop
       usr/share/icons/hicolor/scalable/apps/caldisplay.svg: share/icons/hicolor/scalable/apps/caldisplay.svg
     prime:
       - bin/CalDisplay
       - share/CalDisplay/qml
-      - share/applications/caldisplay.desktop
-      - share/applications/caldisplay-windowed.desktop
+      - usr/share/caldisplay/desktop/caldisplay.desktop
+      - usr/share/caldisplay/desktop/caldisplay-windowed.desktop
       - share/icons/hicolor/scalable/apps/caldisplay.svg
       - -usr/share/doc
       - -usr/share/man
@@ -108,7 +109,7 @@ apps:
       - opengl
       - removable-media
       - x11
-    desktop: share/applications/caldisplay-windowed.desktop
+    desktop: usr/share/caldisplay/desktop/caldisplay-windowed.desktop
 
   caldisplay-kiosk:
     command: bin/CalDisplay
@@ -127,4 +128,4 @@ apps:
       - opengl
       - removable-media
       - x11
-    desktop: share/applications/caldisplay.desktop
+    desktop: usr/share/caldisplay/desktop/caldisplay.desktop

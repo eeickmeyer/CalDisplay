@@ -31,6 +31,7 @@
 #include <QIcon>
 #include <QFileInfo>
 #include <QPixmap>
+#include <QDirIterator>
 
 // ── Anonymous namespace helpers ───────────────────────────────────────────────
 namespace {
@@ -153,7 +154,7 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
                               + QStringLiteral(".png");
 
     if (QFileInfo::exists(cachePath))
-        return cachePath;
+        return QUrl::fromLocalFile(cachePath).toString();
 
     const QIcon icon = QIcon::fromTheme(iconName);
     if (icon.isNull())
@@ -164,7 +165,33 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
         return QString();
 
     if (pixmap.save(cachePath, "PNG"))
-        return cachePath;
+        return QUrl::fromLocalFile(cachePath).toString();
+
+    // Fallback: direct lookup in Papirus icon directories when theme engine cannot render.
+    QStringList roots;
+    const QByteArray snap = qgetenv("SNAP");
+    if (!snap.isEmpty())
+        roots << (QString::fromLocal8Bit(snap) + QStringLiteral("/usr/share/icons/Papirus"));
+    roots << QStringLiteral("/usr/share/icons/Papirus");
+
+    const QStringList relDirs = {
+        QStringLiteral("48x48/status"),
+        QStringLiteral("24x24/panel"),
+        QStringLiteral("16x16/panel"),
+        QStringLiteral("scalable/status"),
+        QStringLiteral("scalable/panel")
+    };
+    const QStringList exts = { QStringLiteral(".svg"), QStringLiteral(".png"), QStringLiteral(".xpm") };
+
+    for (const QString& root : roots) {
+        for (const QString& rel : relDirs) {
+            for (const QString& ext : exts) {
+                const QString candidate = root + QStringLiteral("/") + rel + QStringLiteral("/") + iconName + ext;
+                if (QFileInfo::exists(candidate))
+                    return QUrl::fromLocalFile(candidate).toString();
+            }
+        }
+    }
 
     return QString();
 }

@@ -1354,12 +1354,15 @@ Window {
 
             // Two-column weather layout
             RowLayout {
+                id: weatherRow
                 anchors.fill: parent; anchors.margins: 14; spacing: 14
                 visible: weatherManager.configured
 
                 // ── Left column: current conditions + hourly ──────────────
                 ColumnLayout {
-                    Layout.preferredWidth: 300; Layout.minimumWidth: 240
+                    Layout.preferredWidth: Math.max(280, weatherRow.width * 0.34)
+                    Layout.minimumWidth: 280
+                    Layout.maximumWidth: Math.max(280, weatherRow.width * 0.34)
                     Layout.fillHeight: true; spacing: 12
 
                     // Current conditions card
@@ -1447,6 +1450,7 @@ Window {
                 // ── Right column: extended daily forecast ─────────────────
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
+                    Layout.minimumWidth: 320
                     color: root.ncPanelAlt; radius: 12
                     border.width: 1; border.color: root.ncBorder; clip: true
 
@@ -1494,6 +1498,14 @@ Window {
                                     }
                                 }
                             }
+                        }
+                        Text {
+                            visible: weatherManager.dailyForecast.length === 0
+                            text: weatherManager.busy ? "Loading forecast..." : "No extended forecast data"
+                            color: root.ncSubtleText
+                            font.pixelSize: 16
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
                         }
                     }
                 }

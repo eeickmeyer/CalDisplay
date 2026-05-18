@@ -6,9 +6,12 @@ It runs in two modes:
 - Windowed mode for setup and configuration
 - Full-screen kiosk mode for display
 
+Both modes support calendar views and the Weather tab.
+
 ## Features
 
 - Day, Week, Month, and Two-Month views
+- Weather tab
 - Shared calendar feed support via ICS/webcal URLs
 - Direct local `.ics` file import by path or `file://` URL
 - Multiple feed entries with optional custom calendar names

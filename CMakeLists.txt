@@ -52,6 +52,6 @@ endif()
 # Install targets
 install(TARGETS CalDisplay DESTINATION bin)
 install(DIRECTORY qml DESTINATION share/CalDisplay)
-install(FILES deploy/caldisplay-app.desktop DESTINATION share/applications RENAME caldisplay.desktop)
-install(FILES deploy/caldisplay-windowed.desktop DESTINATION share/applications)
+install(FILES deploy/caldisplay-windowed.desktop DESTINATION share/applications RENAME caldisplay.desktop)
+install(FILES deploy/caldisplay-kiosk.desktop DESTINATION share/applications)
 install(FILES assets/caldisplay.svg DESTINATION share/icons/hicolor/scalable/apps)

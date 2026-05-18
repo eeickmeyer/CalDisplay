@@ -157,15 +157,11 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
         return QUrl::fromLocalFile(cachePath).toString();
 
     const QIcon icon = QIcon::fromTheme(iconName);
-    if (icon.isNull())
-        return QString();
-
-    const QPixmap pixmap = icon.pixmap(size, size);
-    if (pixmap.isNull())
-        return QString();
-
-    if (pixmap.save(cachePath, "PNG"))
-        return QUrl::fromLocalFile(cachePath).toString();
+    if (!icon.isNull()) {
+        const QPixmap pixmap = icon.pixmap(size, size);
+        if (!pixmap.isNull() && pixmap.save(cachePath, "PNG"))
+            return QUrl::fromLocalFile(cachePath).toString();
+    }
 
     // Fallback: direct lookup in Papirus icon directories when theme engine cannot render.
     QStringList roots;
@@ -181,7 +177,7 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
         QStringLiteral("scalable/status"),
         QStringLiteral("scalable/panel")
     };
-    const QStringList exts = { QStringLiteral(".svg"), QStringLiteral(".png"), QStringLiteral(".xpm") };
+    const QStringList exts = { QStringLiteral(".png"), QStringLiteral(".xpm"), QStringLiteral(".svg") };
 
     for (const QString& root : roots) {
         for (const QString& rel : relDirs) {

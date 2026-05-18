@@ -81,13 +81,13 @@ parts:
       usr/bin/CalDisplay: bin/CalDisplay
       usr/share/CalDisplay/qml: share/CalDisplay/qml
       usr/share/applications/caldisplay.desktop: usr/share/caldisplay/desktop/caldisplay.desktop
-      usr/share/applications/caldisplay-windowed.desktop: usr/share/caldisplay/desktop/caldisplay-windowed.desktop
+      usr/share/applications/caldisplay-kiosk.desktop: usr/share/caldisplay/desktop/caldisplay-kiosk.desktop
       usr/share/icons/hicolor/scalable/apps/caldisplay.svg: share/icons/hicolor/scalable/apps/caldisplay.svg
     prime:
       - bin/CalDisplay
       - share/CalDisplay/qml
       - usr/share/caldisplay/desktop/caldisplay.desktop
-      - usr/share/caldisplay/desktop/caldisplay-windowed.desktop
+      - usr/share/caldisplay/desktop/caldisplay-kiosk.desktop
       - share/icons/hicolor/scalable/apps/caldisplay.svg
       - -usr/share/doc
       - -usr/share/man
@@ -110,7 +110,7 @@ apps:
       - opengl
       - removable-media
       - x11
-    desktop: usr/share/caldisplay/desktop/caldisplay-windowed.desktop
+    desktop: usr/share/caldisplay/desktop/caldisplay.desktop
 
   caldisplay-kiosk:
     command: bin/CalDisplay
@@ -129,4 +129,4 @@ apps:
       - opengl
       - removable-media
       - x11
-    desktop: usr/share/caldisplay/desktop/caldisplay.desktop
+    desktop: usr/share/caldisplay/desktop/caldisplay-kiosk.desktop

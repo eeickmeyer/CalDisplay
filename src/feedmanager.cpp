@@ -20,6 +20,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSharedPointer>
 #include <QSettings>
 #include <QStandardPaths>
@@ -91,6 +92,213 @@ QString unfoldIcs(const QByteArray& data) {
     return unfolded.join('\n');
 }
 
+// ── RRULE helpers ─────────────────────────────────────────────────────────────
+
+// Map a two-character ICS weekday name to Qt::DayOfWeek (1=Mon…7=Sun)
+int icsDayToQt(const QString& s) {
+    if (s == QStringLiteral("MO")) return Qt::Monday;
+    if (s == QStringLiteral("TU")) return Qt::Tuesday;
+    if (s == QStringLiteral("WE")) return Qt::Wednesday;
+    if (s == QStringLiteral("TH")) return Qt::Thursday;
+    if (s == QStringLiteral("FR")) return Qt::Friday;
+    if (s == QStringLiteral("SA")) return Qt::Saturday;
+    if (s == QStringLiteral("SU")) return Qt::Sunday;
+    return -1;
+}
+
+// n-th (positive) or n-th-from-end (negative) occurrence of qtDow in year/month
+QDate nthWeekdayInMonth(int year, int month, int n, int qtDow) {
+    if (n > 0) {
+        const QDate first(year, month, 1);
+        int diff = qtDow - first.dayOfWeek();
+        if (diff < 0) diff += 7;
+        return first.addDays(diff + (n - 1) * 7);
+    }
+    // n < 0: count backwards from the last day of the month
+    const QDate last(year, month, QDate(year, month, 1).daysInMonth());
+    int diff = last.dayOfWeek() - qtDow;
+    if (diff < 0) diff += 7;
+    return last.addDays(-diff + (n + 1) * 7);
+}
+
+static constexpr int kRRuleWindowBefore = 30;
+static constexpr int kRRuleWindowAfter  = 366;
+static constexpr int kRRuleMaxExpand    = 100'000; // safety cap
+
+// Expand a recurring VEVENT into individual CalendarEvent instances that fall
+// inside the display window (today - kRRuleWindowBefore … today + kRRuleWindowAfter).
+void expandRecurrences(
+    const CalendarEvent&  base,
+    const QString&        rruleStr,
+    const QSet<QDate>&    exDates,
+    QList<CalendarEvent>* out)
+{
+    // ── Parse RRULE key=value pairs ──────────────────────────────────────────
+    QHash<QString, QString> rule;
+    for (const QString& part : rruleStr.split(';', Qt::SkipEmptyParts)) {
+        const int eq = part.indexOf('=');
+        if (eq > 0)
+            rule.insert(part.left(eq).toUpper(), part.mid(eq + 1).toUpper());
+    }
+    const QString freq = rule.value(QStringLiteral("FREQ"));
+    if (freq.isEmpty()) return;
+
+    const int interval = qMax(1, rule.value(QStringLiteral("INTERVAL"),
+                                            QStringLiteral("1")).toInt());
+    const int countLimit = rule.contains(QStringLiteral("COUNT"))
+                           ? rule.value(QStringLiteral("COUNT")).toInt()
+                           : kRRuleMaxExpand;
+    QDateTime until;
+    if (rule.contains(QStringLiteral("UNTIL")))
+        until = parseIcsDateTime(rule.value(QStringLiteral("UNTIL")));
+
+    // BYDAY: optional position prefix (e.g. "2MO", "-1FR") + weekday name
+    struct ByDay { int pos; int qtDow; };
+    QList<ByDay> byDays;
+    if (rule.contains(QStringLiteral("BYDAY"))) {
+        static const QRegularExpression bdRe(
+            QStringLiteral(R"(([+-]?\d+)?(MO|TU|WE|TH|FR|SA|SU))"));
+        for (const QString& tok :
+             rule.value(QStringLiteral("BYDAY")).split(',', Qt::SkipEmptyParts)) {
+            const auto m = bdRe.match(tok);
+            if (m.hasMatch()) {
+                const int pos = m.captured(1).isEmpty() ? 0 : m.captured(1).toInt();
+                const int dow = icsDayToQt(m.captured(2));
+                if (dow != -1) byDays.append({pos, dow});
+            }
+        }
+    }
+
+    QList<int> byMonthDay;
+    for (const QString& s :
+         rule.value(QStringLiteral("BYMONTHDAY")).split(',', Qt::SkipEmptyParts))
+        if (const int v = s.toInt(); v != 0) byMonthDay.append(v);
+
+    QList<int> byMonth;
+    for (const QString& s :
+         rule.value(QStringLiteral("BYMONTH")).split(',', Qt::SkipEmptyParts))
+        if (const int v = s.toInt(); v >= 1 && v <= 12) byMonth.append(v);
+
+    // ── Window & state ───────────────────────────────────────────────────────
+    const QDate windowStart = QDate::currentDate().addDays(-kRRuleWindowBefore);
+    const QDate windowEnd   = QDate::currentDate().addDays(kRRuleWindowAfter);
+    const qint64 durSecs    = base.start.secsTo(base.end);
+
+    bool done      = false;
+    int  generated = 0;
+
+    // Process one occurrence: count it, check limits, emit if in window.
+    auto tryOcc = [&](const QDateTime& occ) {
+        if (done) return;
+        if (occ < base.start)                   return;       // before series start
+        if (until.isValid() && occ > until)     { done = true; return; }
+        if (occ.date() > windowEnd)             { done = true; return; }
+        if (++generated > countLimit)           { done = true; return; }
+        if (exDates.contains(occ.date()))        return;       // excluded date
+        if (occ.date() < windowStart)            return;       // before display window
+        CalendarEvent ev = base;
+        ev.start = occ;
+        ev.end   = occ.addSecs(durSecs);
+        out->append(ev);
+    };
+
+    // ── Expand by FREQ ───────────────────────────────────────────────────────
+    if (freq == QStringLiteral("DAILY")) {
+        for (QDateTime cur = base.start; !done; cur = cur.addDays(interval))
+            tryOcc(cur);
+
+    } else if (freq == QStringLiteral("WEEKLY")) {
+        for (QDateTime anchor = base.start;
+             !done && anchor.date() <= windowEnd;
+             anchor = anchor.addDays(7 * interval)) {
+            if (byDays.isEmpty()) {
+                tryOcc(anchor);
+            } else {
+                for (const ByDay& bd : byDays) {
+                    if (done) break;
+                    int diff = bd.qtDow - anchor.date().dayOfWeek();
+                    QDateTime occ(anchor.date().addDays(diff),
+                                  anchor.time(), anchor.timeZone());
+                    tryOcc(occ);
+                }
+            }
+        }
+
+    } else if (freq == QStringLiteral("MONTHLY")) {
+        for (int mo = 0; !done; mo += interval) {
+            const QDate mBase = base.start.date().addMonths(mo);
+            if (!mBase.isValid() || mBase > windowEnd) break;
+
+            QList<QDate> candidates;
+            if (!byDays.isEmpty()) {
+                for (const ByDay& bd : byDays) {
+                    if (bd.pos == 0) {
+                        for (QDate d(mBase.year(), mBase.month(), 1);
+                             d.month() == mBase.month(); d = d.addDays(1))
+                            if (d.dayOfWeek() == bd.qtDow) candidates.append(d);
+                    } else {
+                        const QDate d = nthWeekdayInMonth(
+                            mBase.year(), mBase.month(), bd.pos, bd.qtDow);
+                        if (d.isValid()) candidates.append(d);
+                    }
+                }
+            } else if (!byMonthDay.isEmpty()) {
+                for (int mday : byMonthDay) {
+                    const QDate d(mBase.year(), mBase.month(), mday);
+                    if (d.isValid()) candidates.append(d);
+                }
+            } else {
+                const QDate d(mBase.year(), mBase.month(), base.start.date().day());
+                if (d.isValid()) candidates.append(d);
+            }
+            std::sort(candidates.begin(), candidates.end());
+            for (const QDate& d : candidates)
+                tryOcc(QDateTime(d, base.start.time(), base.start.timeZone()));
+        }
+
+    } else if (freq == QStringLiteral("YEARLY")) {
+        for (int y = 0; !done; ++y) {
+            const int year = base.start.date().year() + y * interval;
+            if (year > windowEnd.year() + 1) break;
+
+            QList<QDate> candidates;
+            if (!byMonth.isEmpty() && !byMonthDay.isEmpty()) {
+                for (int mo : byMonth)
+                    for (int md : byMonthDay) {
+                        const QDate d(year, mo, md);
+                        if (d.isValid()) candidates.append(d);
+                    }
+            } else if (!byMonth.isEmpty()) {
+                for (int mo : byMonth) {
+                    const QDate d(year, mo, base.start.date().day());
+                    if (d.isValid()) candidates.append(d);
+                }
+            } else if (!byDays.isEmpty()) {
+                // e.g. FREQ=YEARLY;BYDAY=1SU;BYMONTH=4 → 1st Sunday in April
+                for (const ByDay& bd : byDays) {
+                    if (bd.pos != 0) {
+                        const int mo = byMonth.isEmpty()
+                                       ? base.start.date().month()
+                                       : byMonth.first();
+                        const QDate d = nthWeekdayInMonth(year, mo, bd.pos, bd.qtDow);
+                        if (d.isValid()) candidates.append(d);
+                    }
+                }
+            } else {
+                const QDate d(year,
+                              base.start.date().month(),
+                              base.start.date().day());
+                if (d.isValid()) candidates.append(d);
+            }
+            std::sort(candidates.begin(), candidates.end());
+            for (const QDate& d : candidates)
+                tryOcc(QDateTime(d, base.start.time(), base.start.timeZone()));
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 void appendIcsEvents(const QByteArray& body,
                      const QString& source,
                      const QString& color,
@@ -102,6 +310,8 @@ void appendIcsEvents(const QByteArray& body,
     QString summary;
     QString dtStartRaw;
     QString dtEndRaw;
+    QString rruleRaw;
+    QStringList exDateValues;
     QString status = QStringLiteral("CONFIRMED");
 
     for (const QString& originalLine : lines) {
@@ -111,6 +321,8 @@ void appendIcsEvents(const QByteArray& body,
             summary.clear();
             dtStartRaw.clear();
             dtEndRaw.clear();
+            rruleRaw.clear();
+            exDateValues.clear();
             status = QStringLiteral("CONFIRMED");
             continue;
         }
@@ -131,7 +343,16 @@ void appendIcsEvents(const QByteArray& body,
                 if (!ev.end.isValid() || ev.end < ev.start) {
                     ev.end = ev.start.addSecs(60 * 60);
                 }
-                mergedEvents->append(ev);
+                if (!rruleRaw.isEmpty()) {
+                    QSet<QDate> exDates;
+                    for (const QString& ex : exDateValues) {
+                        const QDateTime exDt = parseIcsDateTime(ex);
+                        if (exDt.isValid()) exDates.insert(exDt.date());
+                    }
+                    expandRecurrences(ev, rruleRaw, exDates, mergedEvents);
+                } else {
+                    mergedEvents->append(ev);
+                }
             }
             inEvent = false;
             continue;
@@ -160,6 +381,10 @@ void appendIcsEvents(const QByteArray& body,
             dtStartRaw = value;
         } else if (key == "DTEND") {
             dtEndRaw = value;
+        } else if (key == "RRULE") {
+            rruleRaw = value;
+        } else if (key == "EXDATE") {
+            exDateValues.append(value.split(',', Qt::SkipEmptyParts));
         } else if (key == "STATUS") {
             status = value.toUpper();
         }

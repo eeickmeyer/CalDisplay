@@ -35,6 +35,7 @@ parts:
       - libqt6quick6
       - libqt6network6
       - libqt6widgets6
+      - papirus-icon-theme
       - libxkbcommon0
       - libfontconfig1
       - libx11-6

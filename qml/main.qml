@@ -57,11 +57,11 @@ Window {
     readonly property string clockTimePattern: use12HourClock ? "h:mm:ss AP" : "HH:mm:ss"
 
     // ── View cycling ──────────────────────────────────────────────
-    property int  currentView:   0      // 0 = Day, 1 = Week, 2 = Month, 3 = Two Months
+    property int  currentView:   0      // 0 = Day, 1 = Week, 2 = Month, 3 = Two Months, 4 = Weather
     property int  viewCycleSecs: 20
     property real cycleProgress: 0.0
     property var  allEvents:     []
-    readonly property var viewNames: ["Day", "Week", "Month", "Two Months"]
+    readonly property var viewNames: ["Day", "Week", "Month", "Two Months", "Weather"]
     readonly property var calendarLegend: {
         var seen = {}; var result = []
         for (var i = 0; i < allEvents.length; i++) {
@@ -436,7 +436,12 @@ Window {
         id: viewCycleTimer
         interval: root.viewCycleSecs * 1000
         running: !root.setupOpen; repeat: true
-        onTriggered: { root.currentView = (root.currentView + 1) % root.viewNames.length; root.startCycle() }
+        onTriggered: {
+            var next = (root.currentView + 1) % root.viewNames.length
+            if (next === 4 && !weatherManager.configured) next = 0
+            root.currentView = next
+            root.startCycle()
+        }
     }
 
     NumberAnimation {
@@ -1325,6 +1330,171 @@ Window {
                     }
                 }
             }
+
+        // ── Weather view (index 4) ────────────────────────────────
+        Rectangle {
+            color: root.ncPanel; radius: 16
+            border.width: 1; border.color: root.ncBorder; clip: true
+
+            // Not-configured placeholder
+            ColumnLayout {
+                anchors.centerIn: parent
+                visible: !weatherManager.configured
+                spacing: 12
+                Image {
+                    source: "image://theme/weather-none-available"
+                    sourceSize.width: 72; sourceSize.height: 72
+                    fillMode: Image.PreserveAspectFit
+                    Layout.preferredWidth: 72; Layout.preferredHeight: 72
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Text { text: "Weather not configured"; font.pixelSize: 24; color: root.ncMutedText; Layout.alignment: Qt.AlignHCenter }
+                Text { text: "Enter a location in Settings"; font.pixelSize: 18; color: root.ncSubtleText; Layout.alignment: Qt.AlignHCenter }
+            }
+
+            // Two-column weather layout
+            RowLayout {
+                anchors.fill: parent; anchors.margins: 14; spacing: 14
+                visible: weatherManager.configured
+
+                // ── Left column: current conditions + hourly ──────────────
+                ColumnLayout {
+                    Layout.preferredWidth: 300; Layout.minimumWidth: 240
+                    Layout.fillHeight: true; spacing: 12
+
+                    // Current conditions card
+                    Rectangle {
+                        Layout.fillWidth: true; Layout.preferredHeight: 264
+                        color: root.ncPanelAlt; radius: 12
+                        border.width: 1; border.color: root.ncBorder
+
+                        ColumnLayout {
+                            anchors.fill: parent; anchors.margins: 16; spacing: 6
+                            Text {
+                                text: weatherManager.locationName || weatherManager.locationQuery
+                                color: root.ncMutedText; font.pixelSize: 16
+                                elide: Text.ElideRight; Layout.fillWidth: true
+                            }
+                            RowLayout {
+                                spacing: 8
+                                Image {
+                                    source: "image://theme/" + (weatherManager.currentWeather.icon || "weather-none-available")
+                                    sourceSize.width: 52; sourceSize.height: 52
+                                    fillMode: Image.PreserveAspectFit
+                                    Layout.preferredWidth: 52; Layout.preferredHeight: 52
+                                }
+                                Text { text: weatherManager.currentWeather.tempStr || "--"; color: root.ncText; font.pixelSize: 56; font.bold: true }
+                            }
+                            Text {
+                                text: weatherManager.currentWeather.description || (weatherManager.busy ? "Loading\u2026" : "No data")
+                                color: root.ncMutedText; font.pixelSize: 20
+                            }
+                            Rectangle { Layout.fillWidth: true; height: 1; color: root.ncBorder }
+                            Grid {
+                                columns: 2; columnSpacing: 14; rowSpacing: 3
+                                Text { text: "Feels like"; color: root.ncSubtleText; font.pixelSize: 14 }
+                                Text { text: weatherManager.currentWeather.feelsLikeStr || "--"; color: root.ncText; font.pixelSize: 14 }
+                                Text { text: "Humidity"; color: root.ncSubtleText; font.pixelSize: 14 }
+                                Text {
+                                    text: weatherManager.currentWeather.humidity !== undefined ? weatherManager.currentWeather.humidity + "%" : "--"
+                                    color: root.ncText; font.pixelSize: 14
+                                }
+                                Text { text: "Wind"; color: root.ncSubtleText; font.pixelSize: 14 }
+                                Text { text: weatherManager.currentWeather.windStr || "--"; color: root.ncText; font.pixelSize: 14 }
+                            }
+                            Item { Layout.fillHeight: true }
+                            Text {
+                                text: weatherManager.statusMessage
+                                color: root.ncSubtleText; font.pixelSize: 12
+                                wrapMode: Text.WordWrap; Layout.fillWidth: true
+                            }
+                        }
+                    }
+
+                    // Hourly forecast card
+                    Rectangle {
+                        Layout.fillWidth: true; Layout.fillHeight: true
+                        color: root.ncPanelAlt; radius: 12
+                        border.width: 1; border.color: root.ncBorder; clip: true
+
+                        ColumnLayout {
+                            anchors.fill: parent; anchors.margins: 12; spacing: 2
+                            Text { text: "Today \u00B7 Hourly"; color: root.ncMutedText; font.pixelSize: 14; font.bold: true; Layout.bottomMargin: 2 }
+                            Repeater {
+                                model: weatherManager.hourlyForecast
+                                delegate: RowLayout {
+                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
+                                    Text { text: modelData.timeText; color: root.ncSubtleText; font.pixelSize: 14; Layout.preferredWidth: 46 }
+                                    Image {
+                                        source: "image://theme/" + (modelData.icon || "weather-none-available")
+                                        sourceSize.width: 18; sourceSize.height: 18
+                                        fillMode: Image.PreserveAspectFit
+                                        Layout.preferredWidth: 18; Layout.preferredHeight: 18
+                                    }
+                                    Text { text: modelData.tempStr; color: root.ncText; font.pixelSize: 14; Layout.preferredWidth: 48 }
+                                    Text {
+                                        text: modelData.precipProb + "%"
+                                        color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
+                                        font.pixelSize: 13
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Right column: extended daily forecast ─────────────────
+                Rectangle {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    color: root.ncPanelAlt; radius: 12
+                    border.width: 1; border.color: root.ncBorder; clip: true
+
+                    ColumnLayout {
+                        anchors.fill: parent; anchors.margins: 16; spacing: 6
+                        Text { text: "Extended Forecast"; color: root.ncMutedText; font.pixelSize: 18; font.bold: true; Layout.bottomMargin: 4 }
+                        Repeater {
+                            model: weatherManager.dailyForecast
+                            delegate: Item {
+                                Layout.fillWidth: true; Layout.fillHeight: true
+                                Rectangle { width: parent.width; height: 1; color: root.ncBorder; visible: index > 0 }
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 4; anchors.rightMargin: 4
+                                    anchors.topMargin: index > 0 ? 2 : 0
+                                    spacing: 10
+                                    Text {
+                                        text: modelData.dayName
+                                        color: index === 0 ? root.ncText : root.ncMutedText
+                                        font.pixelSize: 18; font.bold: index === 0
+                                        Layout.preferredWidth: 90
+                                    }
+                                    Image {
+                                        source: "image://theme/" + (modelData.icon || "weather-none-available")
+                                        sourceSize.width: 22; sourceSize.height: 22
+                                        fillMode: Image.PreserveAspectFit
+                                        Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                                    }
+                                    Text {
+                                        text: modelData.description
+                                        color: root.ncSubtleText; font.pixelSize: 16
+                                        Layout.fillWidth: true; elide: Text.ElideRight
+                                    }
+                                    Text { text: modelData.tempMaxStr; color: root.ncText; font.pixelSize: 17; font.bold: true; Layout.preferredWidth: 54; horizontalAlignment: Text.AlignRight }
+                                    Text { text: modelData.tempMinStr; color: root.ncSubtleText; font.pixelSize: 17; Layout.preferredWidth: 54; horizontalAlignment: Text.AlignRight }
+                                    Text {
+                                        text: modelData.precipProb + "%"
+                                        color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
+                                        font.pixelSize: 15; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         }
         } // Item wrapper for StackLayout
 
@@ -1373,7 +1543,7 @@ Window {
 
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: "Calendar Sources"; color: root.ncText; font.pixelSize: 28; font.bold: true }
+                Text { text: "Settings"; color: root.ncText; font.pixelSize: 28; font.bold: true }
                 Item { Layout.fillWidth: true }
                 Button { text: "Close"; onClicked: root.setupOpen = false }
             }
@@ -1539,6 +1709,89 @@ Window {
                 Text {
                     id: roStatusText; anchors.fill: parent; anchors.margins: 8
                     text: feedManager.statusMessage; color: root.ncMutedText; wrapMode: Text.WordWrap; font.pixelSize: 16
+                }
+            }
+
+            // ── Weather section ──────────────────────────────────────────
+            Rectangle { Layout.fillWidth: true; height: 1; color: root.ncBorder; Layout.topMargin: 6 }
+            Text { text: "Weather"; color: root.ncText; font.pixelSize: 22; font.bold: true }
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                Label { text: "Provider"; color: root.ncText }
+                ComboBox {
+                    model: ["Open-Meteo (free, no key)", "OpenWeatherMap (free key required)"]
+                    currentIndex: weatherManager.provider
+                    onActivated: { weatherManager.provider = currentIndex; weatherManager.saveSettings() }
+                }
+                Item { Layout.fillWidth: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                Label { text: "Location"; color: root.ncText }
+                TextField {
+                    id: weatherLocationField
+                    Layout.fillWidth: true
+                    text: weatherManager.locationQuery
+                    placeholderText: "City name or latitude,longitude"
+                    onEditingFinished: { weatherManager.locationQuery = text; weatherManager.saveSettings() }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                visible: weatherManager.provider === 1
+                Label { text: "API key"; color: root.ncText }
+                TextField {
+                    Layout.fillWidth: true
+                    text: weatherManager.apiKey
+                    placeholderText: "OpenWeatherMap API key"
+                    echoMode: TextInput.Password
+                    onEditingFinished: { weatherManager.apiKey = text; weatherManager.saveSettings() }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                Label { text: "Temperature"; color: root.ncText }
+                ComboBox {
+                    model: ["Celsius (\u00B0C)", "Fahrenheit (\u00B0F)"]
+                    currentIndex: weatherManager.temperatureUnit
+                    onActivated: { weatherManager.temperatureUnit = currentIndex; weatherManager.saveSettings() }
+                }
+                Item { Layout.fillWidth: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                Label { text: "Auto-refresh"; color: root.ncText }
+                Switch {
+                    id: weatherAutoRefreshSwitch
+                    checked: weatherManager.autoRefreshEnabled
+                    onToggled: { weatherManager.autoRefreshEnabled = checked; weatherManager.saveSettings() }
+                }
+                Label { text: "Every"; color: root.ncText }
+                SpinBox {
+                    from: 5; to: 180; value: weatherManager.refreshIntervalMinutes; editable: true
+                    enabled: weatherAutoRefreshSwitch.checked
+                    onValueModified: { weatherManager.refreshIntervalMinutes = value; weatherManager.saveSettings() }
+                }
+                Label { text: "min"; color: root.ncText }
+                Item { Layout.fillWidth: true }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true; spacing: 10
+                Button {
+                    text: weatherManager.busy ? "Fetching\u2026" : "Fetch Now"
+                    enabled: !weatherManager.busy && weatherManager.configured
+                    onClicked: weatherManager.refreshWeather()
+                }
+                Label {
+                    text: weatherManager.statusMessage
+                    color: root.ncSubtleText; font.pixelSize: 14
+                    Layout.fillWidth: true; elide: Text.ElideRight
                 }
             }
         }

@@ -28,6 +28,8 @@ add_executable(CalDisplay
     src/eventmodel.h
     src/feedmanager.cpp
     src/feedmanager.h
+    src/weathermanager.cpp
+    src/weathermanager.h
 )
 
 target_link_libraries(CalDisplay PRIVATE

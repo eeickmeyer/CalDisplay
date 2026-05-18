@@ -16,6 +16,7 @@
 
 #include "eventmodel.h"
 #include "feedmanager.h"
+#include "weathermanager.h"
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
@@ -31,10 +32,12 @@ int main(int argc, char* argv[]) {
 
     EventModel model;
     FeedManager feedManager(&model);
+    WeatherManager weatherManager;
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("eventModel", &model);
     engine.rootContext()->setContextProperty("feedManager", &feedManager);
+    engine.rootContext()->setContextProperty("weatherManager", &weatherManager);
     engine.rootContext()->setContextProperty("windowedMode", windowed);
 
     // Resolve QML path: check snap location, installed location, then source location

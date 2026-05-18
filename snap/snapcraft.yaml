@@ -79,6 +79,10 @@ parts:
     cmake-parameters:
       - -DCMAKE_BUILD_TYPE=Release
       - -DCMAKE_INSTALL_PREFIX=/usr
+    override-build: |
+      craftctl default
+      # Prevent stale launcher artifacts from incremental builds.
+      rm -f "$CRAFT_PART_INSTALL/usr/share/applications/caldisplay-windowed.desktop"
     organize:
       usr/bin/CalDisplay: bin/CalDisplay
       usr/share/CalDisplay/qml: share/CalDisplay/qml

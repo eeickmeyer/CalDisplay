@@ -21,6 +21,7 @@ Window {
     
     property bool setupOpen: windowedMode
     property string currentTime: root.formatClockTime(new Date())
+    property var currentDate: new Date()
     readonly property string ncPrimary: "#0082c9"
     readonly property string ncPrimaryStrong: "#0073b1"
     readonly property string ncAccent: "#2daee0"
@@ -241,7 +242,7 @@ Window {
         if (typeof dayViewPanel === "undefined") {
             return
         }
-        if (root.currentView !== 0 || !root.isSameDate(dayViewPanel.dayDate, new Date())) {
+        if (root.currentView !== 0 || !root.isSameDate(dayViewPanel.dayDate, root.currentDate)) {
             return
         }
 
@@ -294,7 +295,7 @@ Window {
 
     // Mon–Sun of the current week
     function weekDays() {
-        var d = new Date()
+        var d = new Date(root.currentDate)
         d.setHours(0, 0, 0, 0)
         var dow = d.getDay()
         d.setDate(d.getDate() - (feedManager.sundayFirst ? dow : (dow === 0 ? 6 : dow - 1)))
@@ -304,7 +305,7 @@ Window {
     }
 
     function monthInfo(monthOffset) {
-        var today = new Date()
+        var today = new Date(root.currentDate)
         var first = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1)
         var daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
         var firstDay = first.getDay()
@@ -404,6 +405,34 @@ Window {
     }
 
     Timer {
+        id: midnightWatchTimer
+        interval: 60000; running: true; repeat: true
+        onTriggered: {
+            var now = new Date()
+            if (!root.isSameDate(now, root.currentDate)) {
+                root.currentDate = now
+                root.refreshEventData()
+            }
+        }
+    }
+
+    // Catch the case where the system was asleep during midnight rollover:
+    // Qt timers are paused during sleep, so the midnightWatchTimer may not
+    // fire at midnight.  Re-check the date as soon as the app becomes active.
+    Connections {
+        target: Qt.application
+        function onStateChanged() {
+            if (Qt.application.state === Qt.ApplicationActive) {
+                var now = new Date()
+                if (!root.isSameDate(now, root.currentDate)) {
+                    root.currentDate = now
+                    root.refreshEventData()
+                }
+            }
+        }
+    }
+
+    Timer {
         id: viewCycleTimer
         interval: root.viewCycleSecs * 1000
         running: !root.setupOpen; repeat: true
@@ -459,7 +488,7 @@ Window {
             }
             Item { Layout.fillWidth: true }
             Text {
-                text: Qt.formatDateTime(new Date(), "ddd yyyy-MM-dd")
+                text: Qt.formatDateTime(root.currentDate, "ddd yyyy-MM-dd")
                 color: root.ncMutedText; font.pixelSize: 26
             }
             Button {
@@ -536,13 +565,13 @@ Window {
                 color: root.ncPanel; radius: 16
                 border.width: 1; border.color: root.ncBorder; clip: true
 
-                property var dayDate: new Date()
+                property var dayDate: new Date(root.currentDate)
                 property var dayAllDayEvents: root.allDayEventsForDay(dayDate)
                 property var dayTimedEvents: root.timedEventsForDay(dayDate)
                 property var dayTimelineEvents: root.timelineLayoutForDay(dayDate, dayTimedEvents)
                 property int hourHeight: 70
                 property int timelineHeight: 24 * hourHeight
-                property bool isToday: root.isSameDate(dayDate, new Date())
+                property bool isToday: root.isSameDate(dayDate, root.currentDate)
                 property bool firstLayoutSettled: false
                 onDayTimedEventsChanged: Qt.callLater(root.scrollDayTimelineToNow)
                 onWidthChanged: {
@@ -933,7 +962,7 @@ Window {
                                     radius: 8
                                     color: root.ncPanelAlt
                                     border.width: 1
-                                    border.color: root.isSameDate(modelData, new Date()) ? root.ncAccent : root.ncBorder
+                                    border.color: root.isSameDate(modelData, root.currentDate) ? root.ncAccent : root.ncBorder
 
                                     property var colDate: modelData
                                     property var allDayEvents: root.allDayEventsForDay(colDate)
@@ -1018,11 +1047,11 @@ Window {
                                         radius: 10
                                         color: root.ncPanelAlt
                                         border.width: 1
-                                        border.color: root.isSameDate(modelData, new Date()) ? root.ncAccent : root.ncBorder
+                                        border.color: root.isSameDate(modelData, root.currentDate) ? root.ncAccent : root.ncBorder
                                         clip: true
 
                                         property var colDate: modelData
-                                        property bool isToday: root.isSameDate(colDate, new Date())
+                                        property bool isToday: root.isSameDate(colDate, root.currentDate)
                                         property var timedEvents: root.timedEventsForDay(colDate)
                                         property var dayTimelineEvents: root.timelineLayoutForDay(colDate, timedEvents)
 
@@ -1147,7 +1176,7 @@ Window {
                                 Layout.fillWidth: true; Layout.fillHeight: true; radius: 6; clip: true
                                 property bool inMonth: modelData.inMonth
                                 property var cellDate: modelData.date
-                                property bool isToday: inMonth && root.isSameDate(cellDate, new Date())
+                                property bool isToday: inMonth && root.isSameDate(cellDate, root.currentDate)
                                 property var dayEvents: inMonth ? root.eventsForDay(cellDate) : []
                                 color: isToday ? root.ncPrimaryStrong : (inMonth ? root.ncPanelAlt : "#0f1f2f")
                                 border.width: isToday ? 1 : 0; border.color: root.ncAccent
@@ -1247,7 +1276,7 @@ Window {
                                             Layout.fillWidth: true; Layout.fillHeight: true; radius: 6; clip: true
                                             property bool inMonth: modelData.inMonth
                                             property var cellDate: modelData.date
-                                            property bool isToday: inMonth && root.isSameDate(cellDate, new Date())
+                                            property bool isToday: inMonth && root.isSameDate(cellDate, root.currentDate)
                                             property var dayEvents: inMonth ? root.eventsForDay(cellDate) : []
                                             color: isToday ? root.ncPrimaryStrong : (inMonth ? root.ncPanel : "#0f1f2f")
                                             border.width: isToday ? 1 : 0; border.color: root.ncAccent

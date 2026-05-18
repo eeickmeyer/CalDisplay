@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CalDisplay (Kiosk)
+Comment=Family calendar and clock display (fullscreen kiosk)
+Icon=caldisplay
+Exec=caldisplay-kiosk
+Terminal=false
+Categories=Utility;Clock;Calendar;
+Keywords=calendar;clock;display;kiosk;

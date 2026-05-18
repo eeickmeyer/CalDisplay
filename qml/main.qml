@@ -1127,6 +1127,7 @@ Window {
                                                     visible: isToday
                                                     x: 0
                                                     y: {
+                                                        var _tick = root.currentTime
                                                         var now = new Date()
                                                         var minutes = (now.getHours() * 60) + now.getMinutes() + (now.getSeconds() / 60.0)
                                                         return Math.max(0, Math.min(minutes * (weekTimelineContent.hourHeight / 60.0), (weekTimelineContent.hourHeight * 24) - 2))
@@ -1454,18 +1455,21 @@ Window {
                     color: root.ncPanelAlt; radius: 12
                     border.width: 1; border.color: root.ncBorder; clip: true
 
+                    property real availableHeight: height - 60
+                    property int forecastCount: weatherManager.dailyForecast.length
+                    property real itemHeight: forecastCount > 0 ? Math.max(28, availableHeight / forecastCount) : 40
+                    property real baseFontSize: Math.max(12, Math.min(16, itemHeight * 0.38))
+                    property real iconSize: Math.max(16, Math.min(22, itemHeight * 0.48))
+
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 16; spacing: 6
                         Text { text: "Extended Forecast"; color: root.ncMutedText; font.pixelSize: 18; font.bold: true; Layout.bottomMargin: 4 }
-                        ListView {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            clip: true
-                            spacing: 6
+                        Repeater {
                             model: weatherManager.dailyForecast
                             delegate: Rectangle {
-                                width: ListView.view.width
-                                height: 46
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.preferredHeight: parent.parent.parent.itemHeight
                                 color: "transparent"
                                 border.width: 0
                                 RowLayout {
@@ -1475,26 +1479,46 @@ Window {
                                     Text {
                                         text: modelData.dayName
                                         color: index === 0 ? root.ncText : root.ncMutedText
-                                        font.pixelSize: 18; font.bold: index === 0
-                                        Layout.preferredWidth: 90
+                                        font.pixelSize: parent.parent.parent.parent.baseFontSize
+                                        font.bold: index === 0
+                                        Layout.preferredWidth: 80
+                                        elide: Text.ElideRight
                                     }
                                     Image {
                                         source: modelData.iconPath || ""
-                                        sourceSize.width: 22; sourceSize.height: 22
+                                        sourceSize.width: parent.parent.parent.parent.iconSize
+                                        sourceSize.height: parent.parent.parent.parent.iconSize
                                         fillMode: Image.PreserveAspectFit
-                                        Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                                        Layout.preferredWidth: parent.parent.parent.parent.iconSize
+                                        Layout.preferredHeight: parent.parent.parent.parent.iconSize
                                     }
                                     Text {
                                         text: modelData.description
-                                        color: root.ncSubtleText; font.pixelSize: 16
+                                        color: root.ncSubtleText
+                                        font.pixelSize: parent.parent.parent.parent.baseFontSize * 0.9
                                         Layout.fillWidth: true; elide: Text.ElideRight
                                     }
-                                    Text { text: modelData.tempMaxStr; color: root.ncText; font.pixelSize: 17; font.bold: true; Layout.preferredWidth: 54; horizontalAlignment: Text.AlignRight }
-                                    Text { text: modelData.tempMinStr; color: root.ncSubtleText; font.pixelSize: 17; Layout.preferredWidth: 54; horizontalAlignment: Text.AlignRight }
+                                    Text {
+                                        text: modelData.tempMaxStr
+                                        color: root.ncText
+                                        font.pixelSize: parent.parent.parent.parent.baseFontSize
+                                        font.bold: true
+                                        Layout.preferredWidth: 50
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    Text {
+                                        text: modelData.tempMinStr
+                                        color: root.ncSubtleText
+                                        font.pixelSize: parent.parent.parent.parent.baseFontSize
+                                        Layout.preferredWidth: 50
+                                        horizontalAlignment: Text.AlignRight
+                                    }
                                     Text {
                                         text: modelData.precipProb + "%"
                                         color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
-                                        font.pixelSize: 15; Layout.preferredWidth: 40; horizontalAlignment: Text.AlignRight
+                                        font.pixelSize: parent.parent.parent.parent.baseFontSize * 0.85
+                                        Layout.preferredWidth: 36
+                                        horizontalAlignment: Text.AlignRight
                                     }
                                 }
                             }

@@ -16,6 +16,10 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#ifdef HAS_QT_POSITIONING
+#include <QGeoPositionInfoSource>
+#endif
+
 class QNetworkAccessManager;
 
 class WeatherManager : public QObject {
@@ -35,11 +39,15 @@ class WeatherManager : public QObject {
     Q_PROPERTY(QVariantMap  currentWeather  READ currentWeather                                    NOTIFY weatherUpdated)
     Q_PROPERTY(QVariantList hourlyForecast  READ hourlyForecast                                    NOTIFY weatherUpdated)
     Q_PROPERTY(QVariantList dailyForecast   READ dailyForecast                                     NOTIFY weatherUpdated)
+    Q_PROPERTY(QVariantList weatherAlerts   READ weatherAlerts                                     NOTIFY weatherUpdated)
+    Q_PROPERTY(bool locationDetecting       READ locationDetecting                                 NOTIFY locationDetectingChanged)
 
 public:
     // provider values
     static constexpr int OpenMeteo       = 0;
     static constexpr int OpenWeatherMap  = 1;
+    static constexpr int NOAA            = 2;
+    static constexpr int MetNorway       = 3;
 
     // temperatureUnit values
     static constexpr int Celsius         = 0;
@@ -67,10 +75,14 @@ public:
     QVariantMap  currentWeather()   const;
     QVariantList hourlyForecast()   const;
     QVariantList dailyForecast()    const;
+    QVariantList weatherAlerts()    const;
+
+    bool    locationDetecting()     const;
 
     Q_INVOKABLE void refreshWeather();
     Q_INVOKABLE void saveSettings();
     Q_INVOKABLE void loadSettings();
+    Q_INVOKABLE void detectLocation();
 
 signals:
     void providerChanged();
@@ -84,6 +96,7 @@ signals:
     void statusMessageChanged();
     void configuredChanged();
     void weatherUpdated();
+    void locationDetectingChanged();
 
 private:
     // ── Settings ─────────────────────────────────────────────────────────────
@@ -103,8 +116,17 @@ private:
     bool    m_busy         = false;
     QString m_statusMessage;
 
+    // NOAA intermediate state
+    QString m_noaaForecastUrl;
+    QString m_noaaForecastHourlyUrl;
+
     QNetworkAccessManager* m_nam;
     QTimer  m_autoRefreshTimer;
+
+    bool    m_locationDetecting  = false;
+#ifdef HAS_QT_POSITIONING
+    QGeoPositionInfoSource* m_geoSource = nullptr;
+#endif
 
     // ── Raw (always-Celsius) storage ─────────────────────────────────────────
     struct RawCurrent {
@@ -140,6 +162,7 @@ private:
     QVariantMap  m_currentWeather;
     QVariantList m_hourlyForecast;
     QVariantList m_dailyForecast;
+    QVariantList m_weatherAlerts;
 
     // ── Private methods ───────────────────────────────────────────────────────
     void setBusy(bool);
@@ -161,13 +184,36 @@ private:
     void fetchOWMForecast();
     void parseOWMForecast(const QByteArray&);
 
+    // NOAA (National Weather Service)
+    void fetchNOAA();
+    void parseNOAAPoints(const QByteArray&);
+    void fetchNOAAHourly();
+    void parseNOAAHourly(const QByteArray&);
+    void fetchNOAADaily();
+    void parseNOAADaily(const QByteArray&);
+    void fetchNOAAAlerts();
+    void parseNOAAAlerts(const QByteArray&);
+
+    // MET Norway (api.met.no)
+    void fetchMetNorway();
+    void parseMetNorway(const QByteArray&);
+
+    // Auto-location detection
+    void fetchIPGeolocation();
+    void parseIPGeolocation(const QByteArray&);
+    void onCoordsDetected(double lat, double lon, const QString& locationName = QString());
+
     void buildWeatherData();
 
     // ── Static helpers ────────────────────────────────────────────────────────
     static QString wmoDescription(int code);
     static QString wmoIcon(int code);
+    static QString precipTypeFromCode(int code);
     static QString windDirText(int degrees);
     static int     owmIdToWmo(int id);
+    static int     metNoSymbolToWmo(const QString& symbolCode);
+    static int     noaaForecastTextToWmo(const QString& shortForecast);
+    static int     cardinalToDegrees(const QString& dir);
     static QString settingsFilePath();
     static QString iconPathForName(const QString& iconName, int size);
 

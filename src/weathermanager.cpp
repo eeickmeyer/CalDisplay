@@ -36,6 +36,11 @@
 #include <QPainter>
 #include <QSvgRenderer>
 
+#ifdef HAS_QT_POSITIONING
+#include <QGeoPositionInfo>
+#include <QGeoPositionInfoSource>
+#endif
+
 // ── Anonymous namespace helpers ───────────────────────────────────────────────
 namespace {
 
@@ -132,6 +137,19 @@ QString WeatherManager::wmoIcon(int code) {
     if (code == 85 || code == 86)        return QStringLiteral("weather-snow");
     if (code >= 95)                      return QStringLiteral("weather-storm");
     return QStringLiteral("weather-overcast");
+}
+
+QString WeatherManager::precipTypeFromCode(int code) {
+    // Determine precipitation type from WMO weather code
+    if (code == 0 || code == 1 || code == 2 || code == 3) return QString(); // clear/cloudy, no precip
+    if (code >= 45 && code <= 48) return QString(); // fog, no precip
+    if (code >= 51 && code <= 57) return QStringLiteral("Drizzle");
+    if (code >= 61 && code <= 67) return QStringLiteral("Rain");
+    if (code >= 71 && code <= 77) return QStringLiteral("Snow");
+    if (code >= 80 && code <= 82) return QStringLiteral("Rain");
+    if (code == 85 || code == 86) return QStringLiteral("Snow");
+    if (code >= 95 && code <= 99) return QStringLiteral("Storm");
+    return QString(); // unknown, no label
 }
 
 QString WeatherManager::windDirText(int degrees) {
@@ -262,12 +280,14 @@ int     WeatherManager::temperatureUnit()       const { return m_temperatureUnit
 bool    WeatherManager::autoRefreshEnabled()    const { return m_autoRefreshEnabled; }
 int     WeatherManager::refreshIntervalMinutes() const { return m_refreshIntervalMinutes; }
 bool    WeatherManager::busy()                  const { return m_busy; }
+bool    WeatherManager::locationDetecting()      const { return m_locationDetecting; }
 QString WeatherManager::statusMessage()         const { return m_statusMessage; }
 bool    WeatherManager::configured()            const { return !m_locationQuery.trimmed().isEmpty(); }
 bool    WeatherManager::hasData()               const { return m_rawCurrent.valid; }
 QVariantMap  WeatherManager::currentWeather()   const { return m_currentWeather; }
 QVariantList WeatherManager::hourlyForecast()   const { return m_hourlyForecast; }
 QVariantList WeatherManager::dailyForecast()    const { return m_dailyForecast; }
+QVariantList WeatherManager::weatherAlerts()    const { return m_weatherAlerts; }
 
 void WeatherManager::setProvider(int v) {
     if (m_provider == v) return;
@@ -418,6 +438,10 @@ void WeatherManager::refreshWeather() {
 void WeatherManager::doFetch() {
     if (m_provider == OpenWeatherMap && !m_apiKey.isEmpty())
         fetchOWMCurrent();
+    else if (m_provider == NOAA)
+        fetchNOAA();
+    else if (m_provider == MetNorway)
+        fetchMetNorway();
     else
         fetchOpenMeteo();
 }
@@ -506,8 +530,7 @@ void WeatherManager::fetchOpenMeteo() {
 }
 
 void WeatherManager::parseOpenMeteoWeather(const QByteArray& data) {
-    const QJsonObject root = QJsonDocument::fromJson(data).object();
-
+    const QJsonObject root = QJsonDocument::fromJson(data).object();    m_weatherAlerts.clear();
     // ── Current conditions ────────────────────────────────────────────────────
     const QJsonObject cur = root.value(QStringLiteral("current")).toObject();
     m_rawCurrent.valid     = true;
@@ -655,6 +678,7 @@ void WeatherManager::fetchOWMCurrent() {
 
 void WeatherManager::parseOWMCurrent(const QByteArray& data) {
     const QJsonObject root = QJsonDocument::fromJson(data).object();
+    m_weatherAlerts.clear();
     const QJsonObject main = root.value(QStringLiteral("main")).toObject();
     const QJsonObject wind = root.value(QStringLiteral("wind")).toObject();
     const QJsonArray  wx   = root.value(QStringLiteral("weather")).toArray();
@@ -813,6 +837,7 @@ void WeatherManager::buildWeatherData() {
         item[QStringLiteral("iconPath")]  = iconPathForName(wmoIcon(h.code), 32);
         item[QStringLiteral("tempStr")]   = fmtTemp(h.temp);
         item[QStringLiteral("precipProb")] = h.precipProb;
+        item[QStringLiteral("precipType")] = precipTypeFromCode(h.code);
         item[QStringLiteral("code")]      = h.code;
         hourly.append(item);
     }
@@ -839,6 +864,7 @@ void WeatherManager::buildWeatherData() {
         item[QStringLiteral("tempMaxStr")] = fmtTemp(d.tempMax);
         item[QStringLiteral("tempMinStr")] = fmtTemp(d.tempMin);
         item[QStringLiteral("precipProb")] = d.precipProb;
+        item[QStringLiteral("precipType")] = precipTypeFromCode(d.code);
         item[QStringLiteral("sunrise")]    = d.sunrise;
         item[QStringLiteral("sunset")]     = d.sunset;
         item[QStringLiteral("code")]       = d.code;
@@ -849,4 +875,541 @@ void WeatherManager::buildWeatherData() {
     const QString ts = QTime::currentTime().toString(QStringLiteral("HH:mm"));
     setStatus(QStringLiteral("Updated ") + ts);
     emit weatherUpdated();
+}
+
+// ── NOAA (National Weather Service) ───────────────────────────────────────────
+
+int WeatherManager::noaaForecastTextToWmo(const QString& text) {
+    const QString t = text.toLower();
+    if (t.contains(QLatin1String("thunder")))                                      return 95;
+    if (t.contains(QLatin1String("blizzard")) ||
+        (t.contains(QLatin1String("heavy")) && t.contains(QLatin1String("snow")))) return 75;
+    if (t.contains(QLatin1String("snow shower")) ||
+        t.contains(QLatin1String("snow showers")))                                 return 85;
+    if (t.contains(QLatin1String("snow")))                                         return 71;
+    if (t.contains(QLatin1String("freezing rain")) ||
+        t.contains(QLatin1String("ice")))                                          return 67;
+    if (t.contains(QLatin1String("sleet")) ||
+        t.contains(QLatin1String("wintry mix")))                                   return 77;
+    if (t.contains(QLatin1String("heavy")) && t.contains(QLatin1String("rain")))   return 65;
+    if (t.contains(QLatin1String("shower")) ||
+        t.contains(QLatin1String("showers")))                                      return 80;
+    if (t.contains(QLatin1String("drizzle")))                                      return 51;
+    if (t.contains(QLatin1String("rain")))                                         return 63;
+    if (t.contains(QLatin1String("fog")) || t.contains(QLatin1String("mist")) ||
+        t.contains(QLatin1String("haze")))                                         return 45;
+    if (t.contains(QLatin1String("overcast")) ||
+        t.contains(QLatin1String("mostly cloudy")))                                return 3;
+    if (t.contains(QLatin1String("partly")))                                       return 2;
+    if (t.contains(QLatin1String("cloudy")))                                       return 3;
+    return 0;
+}
+
+int WeatherManager::cardinalToDegrees(const QString& dir) {
+    static const struct { const char* d; int deg; } table[] = {
+        {"N",0},{"NNE",22},{"NE",45},{"ENE",67},{"E",90},{"ESE",112},
+        {"SE",135},{"SSE",157},{"S",180},{"SSW",202},{"SW",225},{"WSW",247},
+        {"W",270},{"WNW",292},{"NW",315},{"NNW",337}
+    };
+    for (const auto& t : table)
+        if (dir == QLatin1String(t.d)) return t.deg;
+    return 0;
+}
+
+void WeatherManager::fetchNOAA() {
+    if (!m_hasCoordinates) {
+        geocodeOpenMeteo();
+        return;
+    }
+    const QString urlStr = QStringLiteral("https://api.weather.gov/points/%1,%2")
+        .arg(m_latitude,  0, 'f', 4)
+        .arg(m_longitude, 0, 'f', 4);
+    QUrl noaaPointsUrl(urlStr);
+    QNetworkRequest req(noaaPointsUrl);
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("CalDisplay/1.0 (github.com/caldisplay)"));
+    req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/geo+json"));
+    auto* reply = m_nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            setBusy(false);
+            setStatus(QStringLiteral("NOAA error (US locations only): ") + reply->errorString());
+            return;
+        }
+        parseNOAAPoints(reply->readAll());
+    });
+}
+
+void WeatherManager::parseNOAAPoints(const QByteArray& data) {
+    const QJsonObject root  = QJsonDocument::fromJson(data).object();
+    const QJsonObject props = root.value(QStringLiteral("properties")).toObject();
+    m_noaaForecastUrl       = js(props, QStringLiteral("forecast"));
+    m_noaaForecastHourlyUrl = js(props, QStringLiteral("forecastHourly"));
+    m_weatherAlerts.clear();
+    if (m_noaaForecastUrl.isEmpty() || m_noaaForecastHourlyUrl.isEmpty()) {
+        setBusy(false);
+        setStatus(QStringLiteral("NOAA: no forecast URLs returned (US locations only)"));
+        return;
+    }
+    // Update location name from NOAA relativeLocation
+    const QJsonObject relLoc = props.value(QStringLiteral("relativeLocation"))
+                                    .toObject()
+                                    .value(QStringLiteral("properties"))
+                                    .toObject();
+    const QString city  = js(relLoc, QStringLiteral("city"));
+    const QString state = js(relLoc, QStringLiteral("state"));
+    if (!city.isEmpty()) {
+        m_locationName = state.isEmpty() ? city : city + QStringLiteral(", ") + state;
+        emit locationNameChanged();
+    }
+    fetchNOAAHourly();
+}
+
+void WeatherManager::fetchNOAAHourly() {
+    QUrl hourlyUrl(m_noaaForecastHourlyUrl);
+    QNetworkRequest req(hourlyUrl);
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("CalDisplay/1.0 (github.com/caldisplay)"));
+    req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/geo+json"));
+    auto* reply = m_nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            setBusy(false);
+            setStatus(QStringLiteral("NOAA hourly error: ") + reply->errorString());
+            return;
+        }
+        parseNOAAHourly(reply->readAll());
+    });
+}
+
+void WeatherManager::parseNOAAHourly(const QByteArray& data) {
+    const QJsonArray periods = QJsonDocument::fromJson(data).object()
+                                   .value(QStringLiteral("properties")).toObject()
+                                   .value(QStringLiteral("periods")).toArray();
+    m_rawHourly.clear();
+    m_rawCurrent.valid = false;
+    const QDateTime now   = QDateTime::currentDateTime();
+    const QDate     today = now.date();
+    int count = 0;
+    static const QRegularExpression windNumRe(QStringLiteral(R"((\d+))"));
+
+    for (const QJsonValue& v : periods) {
+        const QJsonObject p   = v.toObject();
+        const QDateTime   dt  = QDateTime::fromString(
+                                    js(p, QStringLiteral("startTime")),
+                                    Qt::ISODate).toLocalTime();
+        if (!dt.isValid()) continue;
+
+        const double tempF    = p.value(QStringLiteral("temperature")).toDouble();
+        const double tempC    = (tempF - 32.0) * 5.0 / 9.0;
+        const QJsonObject precipObj = p.value(QStringLiteral("probabilityOfPrecipitation")).toObject();
+        const int precipProb  = precipObj.value(QStringLiteral("value")).isNull()
+                                ? 0 : static_cast<int>(precipObj.value(QStringLiteral("value")).toDouble());
+        const int wmoCode     = noaaForecastTextToWmo(js(p, QStringLiteral("shortForecast")));
+
+        // First period → current conditions
+        if (!m_rawCurrent.valid) {
+            m_rawCurrent.valid     = true;
+            m_rawCurrent.temp      = tempC;
+            m_rawCurrent.feelsLike = tempC;
+            m_rawCurrent.humidity  = 0;
+            m_rawCurrent.code      = wmoCode;
+            const QString windStr  = js(p, QStringLiteral("windSpeed"));
+            const auto    wm       = windNumRe.match(windStr);
+            m_rawCurrent.windSpeed = wm.hasMatch() ? wm.captured(1).toDouble() * 1.60934 : 0.0;
+            m_rawCurrent.windDir   = cardinalToDegrees(js(p, QStringLiteral("windDirection")));
+        }
+
+        // Collect next 12 upcoming hours
+        if (dt < now) continue;
+        if (dt.date() > today.addDays(1)) break;
+        if (count >= 12) break;
+
+        RawHourly entry;
+        entry.hour       = dt.time().hour();
+        entry.temp       = tempC;
+        entry.code       = wmoCode;
+        entry.precipProb = precipProb;
+        m_rawHourly.append(entry);
+        ++count;
+    }
+    fetchNOAADaily();
+}
+
+void WeatherManager::fetchNOAADaily() {
+    QUrl dailyUrl(m_noaaForecastUrl);
+    QNetworkRequest req(dailyUrl);
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("CalDisplay/1.0 (github.com/caldisplay)"));
+    req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/geo+json"));
+    auto* reply = m_nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            buildWeatherData();
+            setBusy(false);
+            setStatus(QStringLiteral("NOAA daily error: ") + reply->errorString());
+            return;
+        }
+        parseNOAADaily(reply->readAll());
+    });
+}
+
+void WeatherManager::parseNOAADaily(const QByteArray& data) {
+    const QJsonArray periods = QJsonDocument::fromJson(data).object()
+                                   .value(QStringLiteral("properties")).toObject()
+                                   .value(QStringLiteral("periods")).toArray();
+    struct DayData {
+        double tempMax = -9999, tempMin = 9999;
+        int    code = 0, precipProb = 0;
+    };
+    QMap<QDate, DayData> days;
+
+    for (const QJsonValue& v : periods) {
+        const QJsonObject p      = v.toObject();
+        const QDateTime   dt     = QDateTime::fromString(
+                                       js(p, QStringLiteral("startTime")),
+                                       Qt::ISODate).toLocalTime();
+        if (!dt.isValid()) continue;
+        const double tempF    = p.value(QStringLiteral("temperature")).toDouble();
+        const double tempC    = (tempF - 32.0) * 5.0 / 9.0;
+        const QJsonObject precipObj = p.value(QStringLiteral("probabilityOfPrecipitation")).toObject();
+        const int precipProb  = precipObj.value(QStringLiteral("value")).isNull()
+                                ? 0 : static_cast<int>(precipObj.value(QStringLiteral("value")).toDouble());
+        const int  wmoCode    = noaaForecastTextToWmo(js(p, QStringLiteral("shortForecast")));
+        const bool isDaytime  = p.value(QStringLiteral("isDaytime")).toBool(true);
+
+        DayData& dd = days[dt.date()];
+        if (isDaytime) {
+            dd.tempMax = qMax(dd.tempMax, tempC);
+            dd.code    = wmoCode;
+        } else {
+            dd.tempMin = qMin(dd.tempMin, tempC);
+        }
+        dd.precipProb = qMax(dd.precipProb, precipProb);
+    }
+
+    m_rawDaily.clear();
+    for (auto it = days.begin(); it != days.end(); ++it) {
+        const DayData& dd = it.value();
+        RawDaily rd;
+        rd.date       = it.key();
+        rd.tempMax    = dd.tempMax > -9998 ? dd.tempMax : 0.0;
+        rd.tempMin    = dd.tempMin <  9998 ? dd.tempMin : 0.0;
+        rd.code       = dd.code;
+        rd.precipProb = dd.precipProb;
+        m_rawDaily.append(rd);
+    }
+    fetchNOAAAlerts();
+}
+
+void WeatherManager::fetchNOAAAlerts() {
+    const QString urlStr = QStringLiteral("https://api.weather.gov/alerts/active?point=%1,%2")
+        .arg(m_latitude,  0, 'f', 4)
+        .arg(m_longitude, 0, 'f', 4);
+    QUrl alertsUrl(urlStr);
+    QNetworkRequest req(alertsUrl);
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("CalDisplay/1.0 (github.com/caldisplay)"));
+    req.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/geo+json"));
+    auto* reply = m_nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() == QNetworkReply::NoError)
+            parseNOAAAlerts(reply->readAll());
+        buildWeatherData();
+        setBusy(false);
+    });
+}
+
+void WeatherManager::parseNOAAAlerts(const QByteArray& data) {
+    const QJsonArray features = QJsonDocument::fromJson(data).object()
+                                    .value(QStringLiteral("features")).toArray();
+    m_weatherAlerts.clear();
+    const QDateTime now = QDateTime::currentDateTime();
+    for (const QJsonValue& f : features) {
+        const QJsonObject props = f.toObject()
+                                   .value(QStringLiteral("properties")).toObject();
+        const QString expiresStr = js(props, QStringLiteral("expires"));
+        if (!expiresStr.isEmpty()) {
+            const QDateTime expires = QDateTime::fromString(expiresStr, Qt::ISODate);
+            if (expires.isValid() && expires < now) continue;
+        }
+        QVariantMap alert;
+        alert[QStringLiteral("event")]       = js(props, QStringLiteral("event"));
+        alert[QStringLiteral("headline")]    = js(props, QStringLiteral("headline"));
+        alert[QStringLiteral("description")] = js(props, QStringLiteral("description"));
+        alert[QStringLiteral("severity")]    = js(props, QStringLiteral("severity"));
+        alert[QStringLiteral("expires")]     = expiresStr;
+        m_weatherAlerts.append(alert);
+    }
+}
+
+// ── MET Norway (api.met.no) ────────────────────────────────────────────────────
+
+int WeatherManager::metNoSymbolToWmo(const QString& symbol) {
+    const QString s = symbol.toLower();
+    if (s.contains(QLatin1String("thunder")))                                    return 95;
+    if (s.startsWith(QLatin1String("fog")))                                      return 45;
+    if (s.contains(QLatin1String("sleet")))                                      return 77;
+    if (s.contains(QLatin1String("heavysnow")))
+        return s.contains(QLatin1String("shower")) ? 86 : 75;
+    if (s.contains(QLatin1String("lightsnow")))
+        return s.contains(QLatin1String("shower")) ? 85 : 71;
+    if (s.contains(QLatin1String("snow")))
+        return s.contains(QLatin1String("shower")) ? 85 : 73;
+    if (s.contains(QLatin1String("heavyrain")))
+        return s.contains(QLatin1String("shower")) ? 82 : 65;
+    if (s.contains(QLatin1String("lightrain")))
+        return s.contains(QLatin1String("shower")) ? 80 : 61;
+    if (s.contains(QLatin1String("rain")))
+        return s.contains(QLatin1String("shower")) ? 80 : 63;
+    if (s.contains(QLatin1String("heavydrizzle")))                               return 55;
+    if (s.contains(QLatin1String("drizzle")))                                    return 51;
+    if (s.startsWith(QLatin1String("cloudy")))                                   return 3;
+    if (s.startsWith(QLatin1String("partlycloudy")))                             return 2;
+    if (s.startsWith(QLatin1String("fair")))                                     return 1;
+    return 0; // clearsky or unknown
+}
+
+void WeatherManager::fetchMetNorway() {
+    if (!m_hasCoordinates) {
+        geocodeOpenMeteo();
+        return;
+    }
+    QUrl url(QStringLiteral("https://api.met.no/weatherapi/locationforecast/2.0/compact"));
+    QUrlQuery q;
+    q.addQueryItem(QStringLiteral("lat"), QString::number(m_latitude,  'f', 4));
+    q.addQueryItem(QStringLiteral("lon"), QString::number(m_longitude, 'f', 4));
+    url.setQuery(q);
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("CalDisplay/1.0 github.com/caldisplay"));
+    auto* reply = m_nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            setBusy(false);
+            setStatus(QStringLiteral("MET Norway error: ") + reply->errorString());
+            return;
+        }
+        parseMetNorway(reply->readAll());
+    });
+}
+
+void WeatherManager::parseMetNorway(const QByteArray& data) {
+    const QJsonArray timeseries = QJsonDocument::fromJson(data).object()
+                                      .value(QStringLiteral("properties")).toObject()
+                                      .value(QStringLiteral("timeseries")).toArray();
+    m_rawCurrent.valid = false;
+    m_rawHourly.clear();
+    m_rawDaily.clear();
+    m_weatherAlerts.clear();
+
+    const QDateTime now   = QDateTime::currentDateTime();
+    const QDate     today = now.date();
+    int hourlyCount = 0;
+
+    struct DayAccum {
+        double tempMax = -9999, tempMin = 9999;
+        int    code = 0;
+        double totalPrecip = 0.0;
+        int    count = 0;
+    };
+    QMap<QDate, DayAccum> dayMap;
+
+    for (const QJsonValue& v : timeseries) {
+        const QJsonObject entry = v.toObject();
+        const QDateTime   dt    = QDateTime::fromString(
+                                      entry.value(QStringLiteral("time")).toString(),
+                                      Qt::ISODate).toLocalTime();
+        if (!dt.isValid()) continue;
+
+        const QJsonObject entryData = entry.value(QStringLiteral("data")).toObject();
+        const QJsonObject instant   = entryData.value(QStringLiteral("instant"))
+                                               .toObject()
+                                               .value(QStringLiteral("details"))
+                                               .toObject();
+        const QJsonObject next1h    = entryData.value(QStringLiteral("next_1_hours")).toObject();
+        const QJsonObject next6h    = entryData.value(QStringLiteral("next_6_hours")).toObject();
+        const QJsonObject next12h   = entryData.value(QStringLiteral("next_12_hours")).toObject();
+
+        const double airTemp   = instant.value(QStringLiteral("air_temperature")).toDouble();
+        const double windSpeed = instant.value(QStringLiteral("wind_speed")).toDouble() * 3.6;
+        const int    windDir   = static_cast<int>(
+                                     instant.value(QStringLiteral("wind_from_direction")).toDouble());
+        const int    humidity  = static_cast<int>(
+                                     instant.value(QStringLiteral("relative_humidity")).toDouble());
+
+        // Symbol and precipitation: prefer next_1_hours, then next_6_hours, then next_12_hours
+        QString symbolCode;
+        double  precipAmount = 0.0;
+        if (!next1h.isEmpty()) {
+            symbolCode   = next1h.value(QStringLiteral("summary")).toObject()
+                               .value(QStringLiteral("symbol_code")).toString();
+            precipAmount = next1h.value(QStringLiteral("details")).toObject()
+                               .value(QStringLiteral("precipitation_amount")).toDouble();
+        } else if (!next6h.isEmpty()) {
+            symbolCode   = next6h.value(QStringLiteral("summary")).toObject()
+                               .value(QStringLiteral("symbol_code")).toString();
+            precipAmount = next6h.value(QStringLiteral("details")).toObject()
+                               .value(QStringLiteral("precipitation_amount")).toDouble();
+        } else if (!next12h.isEmpty()) {
+            symbolCode   = next12h.value(QStringLiteral("summary")).toObject()
+                               .value(QStringLiteral("symbol_code")).toString();
+        }
+
+        const int wmoCode    = metNoSymbolToWmo(symbolCode);
+        const int precipProb = precipAmount > 0.1
+                               ? static_cast<int>(qMin(20.0 + precipAmount * 30.0, 90.0)) : 0;
+
+        // Current: first entry at or just before now
+        if (!m_rawCurrent.valid && dt >= now.addSecs(-3600)) {
+            m_rawCurrent.valid     = true;
+            m_rawCurrent.temp      = airTemp;
+            m_rawCurrent.feelsLike = airTemp;
+            m_rawCurrent.humidity  = humidity;
+            m_rawCurrent.windSpeed = windSpeed;
+            m_rawCurrent.windDir   = windDir;
+            m_rawCurrent.code      = wmoCode;
+        }
+
+        // Hourly: next 12 hours from now
+        if (hourlyCount < 12 && dt >= now && dt.date() <= today.addDays(1)) {
+            RawHourly rh;
+            rh.hour       = dt.time().hour();
+            rh.temp       = airTemp;
+            rh.code       = wmoCode;
+            rh.precipProb = precipProb;
+            m_rawHourly.append(rh);
+            ++hourlyCount;
+        }
+
+        // Daily accumulation (9-day window)
+        if (dt.date() <= today.addDays(9)) {
+            DayAccum& da = dayMap[dt.date()];
+            da.tempMax     = qMax(da.tempMax, airTemp);
+            da.tempMin     = qMin(da.tempMin, airTemp);
+            da.totalPrecip += precipAmount;
+            if (wmoCode > da.code) da.code = wmoCode;
+            ++da.count;
+        }
+    }
+
+    m_rawDaily.clear();
+    for (auto it = dayMap.begin(); it != dayMap.end(); ++it) {
+        const DayAccum& da = it.value();
+        if (da.count == 0) continue;
+        RawDaily rd;
+        rd.date       = it.key();
+        rd.tempMax    = da.tempMax > -9998 ? da.tempMax : 0.0;
+        rd.tempMin    = da.tempMin <  9998 ? da.tempMin : 0.0;
+        rd.code       = da.code;
+        rd.precipProb = da.totalPrecip > 0.1
+                        ? static_cast<int>(qMin(20.0 + da.totalPrecip * 10.0, 90.0)) : 0;
+        m_rawDaily.append(rd);
+    }
+
+    buildWeatherData();
+    setBusy(false);
+}
+
+// ── Auto-location detection ────────────────────────────────────────────────────
+
+void WeatherManager::detectLocation() {
+    if (m_locationDetecting) return;
+    m_locationDetecting = true;
+    emit locationDetectingChanged();
+    setStatus(QStringLiteral("Detecting location\u2026"));
+
+#ifdef HAS_QT_POSITIONING
+    if (!m_geoSource)
+        m_geoSource = QGeoPositionInfoSource::createDefaultSource(this);
+
+    if (m_geoSource) {
+        disconnect(m_geoSource, nullptr, this, nullptr);
+
+        connect(m_geoSource, &QGeoPositionInfoSource::positionUpdated, this,
+                [this](const QGeoPositionInfo& info) {
+                    disconnect(m_geoSource, nullptr, this, nullptr);
+                    onCoordsDetected(info.coordinate().latitude(),
+                                     info.coordinate().longitude());
+                }, Qt::SingleShotConnection);
+
+        connect(m_geoSource, &QGeoPositionInfoSource::errorOccurred, this,
+                [this](QGeoPositionInfoSource::Error) {
+                    disconnect(m_geoSource, nullptr, this, nullptr);
+                    fetchIPGeolocation();
+                }, Qt::SingleShotConnection);
+
+        m_geoSource->requestUpdate(15000);
+        return;
+    }
+#endif
+    fetchIPGeolocation();
+}
+
+void WeatherManager::fetchIPGeolocation() {
+    QNetworkRequest req(QUrl(QStringLiteral("https://ipinfo.io/json")));
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("CalDisplay/1.0 (github.com/caldisplay)"));
+    auto* reply = m_nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            m_locationDetecting = false;
+            emit locationDetectingChanged();
+            setStatus(QStringLiteral("Location detection failed: ") + reply->errorString());
+            return;
+        }
+        parseIPGeolocation(reply->readAll());
+    });
+}
+
+void WeatherManager::parseIPGeolocation(const QByteArray& data) {
+    const QJsonObject root = QJsonDocument::fromJson(data).object();
+    const QString loc = root.value(QStringLiteral("loc")).toString();
+    const int commaIdx = loc.indexOf(QLatin1Char(','));
+    if (commaIdx < 0) {
+        m_locationDetecting = false;
+        emit locationDetectingChanged();
+        setStatus(QStringLiteral("Location detection: unexpected response"));
+        return;
+    }
+    const double lat = loc.left(commaIdx).toDouble();
+    const double lon = loc.mid(commaIdx + 1).toDouble();
+    const QString city   = root.value(QStringLiteral("city")).toString();
+    const QString region = root.value(QStringLiteral("region")).toString();
+    QString name;
+    if (!city.isEmpty())
+        name = region.isEmpty() ? city : city + QStringLiteral(", ") + region;
+    onCoordsDetected(lat, lon, name);
+}
+
+void WeatherManager::onCoordsDetected(double lat, double lon, const QString& locationName) {
+    m_latitude       = lat;
+    m_longitude      = lon;
+    m_hasCoordinates = true;
+
+    const QString coordStr = QString::number(lat, 'f', 4)
+                             + QStringLiteral(",")
+                             + QString::number(lon, 'f', 4);
+    m_locationQuery       = coordStr;
+    m_cachedLocationQuery = coordStr;
+    emit locationQueryChanged();
+
+    if (!locationName.isEmpty()) {
+        m_locationName = locationName;
+        emit locationNameChanged();
+    }
+
+    m_locationDetecting = false;
+    emit locationDetectingChanged();
+
+    saveSettings();
+    setBusy(true);
+    setStatus(QStringLiteral("Updating\u2026"));
+    doFetch();
 }

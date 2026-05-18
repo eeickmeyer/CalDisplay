@@ -1376,7 +1376,7 @@ Window {
                             anchors.fill: parent; anchors.margins: 16; spacing: 6
                             Text {
                                 text: weatherManager.locationName || weatherManager.locationQuery
-                                color: root.ncMutedText; font.pixelSize: 16
+                                color: root.ncMutedText; font.pixelSize: 18
                                 elide: Text.ElideRight; Layout.fillWidth: true
                             }
                             RowLayout {
@@ -1396,20 +1396,20 @@ Window {
                             Rectangle { Layout.fillWidth: true; height: 1; color: root.ncBorder }
                             Grid {
                                 columns: 2; columnSpacing: 14; rowSpacing: 3
-                                Text { text: "Feels like"; color: root.ncSubtleText; font.pixelSize: 14 }
-                                Text { text: weatherManager.currentWeather.feelsLikeStr || "--"; color: root.ncText; font.pixelSize: 14 }
-                                Text { text: "Humidity"; color: root.ncSubtleText; font.pixelSize: 14 }
+                                Text { text: "Feels like"; color: root.ncSubtleText; font.pixelSize: 18 }
+                                Text { text: weatherManager.currentWeather.feelsLikeStr || "--"; color: root.ncText; font.pixelSize: 18 }
+                                Text { text: "Humidity"; color: root.ncSubtleText; font.pixelSize: 18 }
                                 Text {
                                     text: weatherManager.currentWeather.humidity !== undefined ? weatherManager.currentWeather.humidity + "%" : "--"
-                                    color: root.ncText; font.pixelSize: 14
+                                    color: root.ncText; font.pixelSize: 18
                                 }
-                                Text { text: "Wind"; color: root.ncSubtleText; font.pixelSize: 14 }
-                                Text { text: weatherManager.currentWeather.windStr || "--"; color: root.ncText; font.pixelSize: 14 }
+                                Text { text: "Wind"; color: root.ncSubtleText; font.pixelSize: 18 }
+                                Text { text: weatherManager.currentWeather.windStr || "--"; color: root.ncText; font.pixelSize: 18 }
                             }
                             Item { Layout.fillHeight: true }
                             Text {
                                 text: weatherManager.statusMessage
-                                color: root.ncSubtleText; font.pixelSize: 12
+                                color: root.ncSubtleText; font.pixelSize: 14
                                 wrapMode: Text.WordWrap; Layout.fillWidth: true
                             }
                         }
@@ -1423,23 +1423,24 @@ Window {
 
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 12; spacing: 2
-                            Text { text: "Today \u00B7 Hourly"; color: root.ncMutedText; font.pixelSize: 14; font.bold: true; Layout.bottomMargin: 2 }
+                            Text { text: "Today \u00B7 Hourly"; color: root.ncMutedText; font.pixelSize: 16; font.bold: true; Layout.bottomMargin: 2 }
                             Repeater {
                                 model: weatherManager.hourlyForecast
                                 delegate: RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
-                                    Text { text: modelData.timeText; color: root.ncSubtleText; font.pixelSize: 14; Layout.preferredWidth: 46 }
+                                    Text { text: modelData.timeText; color: root.ncSubtleText; font.pixelSize: 16; Layout.preferredWidth: 54 }
                                     Image {
                                         source: modelData.iconPath || ""
-                                        sourceSize.width: 18; sourceSize.height: 18
+                                        sourceSize.width: 22; sourceSize.height: 22
                                         fillMode: Image.PreserveAspectFit
-                                        Layout.preferredWidth: 18; Layout.preferredHeight: 18
+                                        Layout.preferredWidth: 22; Layout.preferredHeight: 22
                                     }
-                                    Text { text: modelData.tempStr; color: root.ncText; font.pixelSize: 14; Layout.preferredWidth: 48 }
+                                    Text { text: modelData.tempStr; color: root.ncText; font.pixelSize: 16; Layout.preferredWidth: 54 }
                                     Text {
-                                        text: modelData.precipProb + "%"
+                                        text: (modelData.precipType ? modelData.precipType + " " : "") + modelData.precipProb + "%"
                                         color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
-                                        font.pixelSize: 13
+                                        font.pixelSize: 15
+                                        visible: modelData.precipProb > 0
                                     }
                                     Item { Layout.fillWidth: true }
                                 }
@@ -1458,12 +1459,87 @@ Window {
                     property real availableHeight: height - 60
                     property int forecastCount: weatherManager.dailyForecast.length
                     property real itemHeight: forecastCount > 0 ? Math.max(28, availableHeight / forecastCount) : 40
-                    property real baseFontSize: Math.max(12, Math.min(16, itemHeight * 0.38))
-                    property real iconSize: Math.max(16, Math.min(22, itemHeight * 0.48))
+                    property real baseFontSize: Math.max(16, Math.min(22, itemHeight * 0.5))
+                    property real iconSize: Math.max(20, Math.min(28, itemHeight * 0.6))
 
                     ColumnLayout {
                         anchors.fill: parent; anchors.margins: 16; spacing: 6
-                        Text { text: "Extended Forecast"; color: root.ncMutedText; font.pixelSize: 18; font.bold: true; Layout.bottomMargin: 4 }
+                        Text { text: "Extended Forecast"; color: root.ncMutedText; font.pixelSize: 20; font.bold: true; Layout.bottomMargin: 4 }
+                        
+                        // Weather Alerts with auto-scroll
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: weatherManager.weatherAlerts.length > 0 ? 84 : 0
+                            visible: weatherManager.weatherAlerts.length > 0
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#cc3311"
+                                radius: 8
+                                border.width: 2
+                                border.color: "#ff4422"
+                                
+                                SwipeView {
+                                    id: alertsSwipeView
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    clip: true
+                                    interactive: false
+                                    
+                                    Repeater {
+                                        model: weatherManager.weatherAlerts
+                                        delegate: RowLayout {
+                                            spacing: 8
+                                            
+                                            Text {
+                                                text: "\u26A0"
+                                                font.pixelSize: 24
+                                                color: "#ffffff"
+                                            }
+                                            
+                                            Text {
+                                                text: modelData.event + (modelData.headline ? "\n" + modelData.headline : "")
+                                                color: "#ffffff"
+                                                font.pixelSize: 15
+                                                font.bold: true
+                                                wrapMode: Text.WordWrap
+                                                Layout.fillWidth: true
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+                                    
+                                    Timer {
+                                        interval: 5000
+                                        running: alertsSwipeView.count > 1
+                                        repeat: true
+                                        onTriggered: {
+                                            if (alertsSwipeView.currentIndex < alertsSwipeView.count - 1)
+                                                alertsSwipeView.currentIndex++
+                                            else
+                                                alertsSwipeView.currentIndex = 0
+                                        }
+                                    }
+                                }
+                                
+                                PageIndicator {
+                                    visible: alertsSwipeView.count > 1
+                                    count: alertsSwipeView.count
+                                    currentIndex: alertsSwipeView.currentIndex
+                                    anchors.bottom: parent.bottom
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottomMargin: 4
+                                    
+                                    delegate: Rectangle {
+                                        width: 6
+                                        height: 6
+                                        radius: 3
+                                        color: index === alertsSwipeView.currentIndex ? "#ffffff" : "#ffffff80"
+                                    }
+                                }
+                            }
+                        }
+                        
                         Repeater {
                             model: weatherManager.dailyForecast
                             delegate: Rectangle {
@@ -1481,7 +1557,8 @@ Window {
                                         color: index === 0 ? root.ncText : root.ncMutedText
                                         font.pixelSize: parent.parent.parent.parent.baseFontSize
                                         font.bold: index === 0
-                                        Layout.preferredWidth: 80
+                                        Layout.preferredWidth: 110
+                                        Layout.minimumWidth: 110
                                         elide: Text.ElideRight
                                     }
                                     Image {
@@ -1491,6 +1568,7 @@ Window {
                                         fillMode: Image.PreserveAspectFit
                                         Layout.preferredWidth: parent.parent.parent.parent.iconSize
                                         Layout.preferredHeight: parent.parent.parent.parent.iconSize
+                                        Layout.minimumWidth: parent.parent.parent.parent.iconSize
                                     }
                                     Text {
                                         text: modelData.description
@@ -1503,22 +1581,28 @@ Window {
                                         color: root.ncText
                                         font.pixelSize: parent.parent.parent.parent.baseFontSize
                                         font.bold: true
-                                        Layout.preferredWidth: 50
+                                        Layout.preferredWidth: 64
+                                        Layout.minimumWidth: 64
                                         horizontalAlignment: Text.AlignRight
                                     }
                                     Text {
                                         text: modelData.tempMinStr
                                         color: root.ncSubtleText
                                         font.pixelSize: parent.parent.parent.parent.baseFontSize
-                                        Layout.preferredWidth: 50
+                                        Layout.preferredWidth: 64
+                                        Layout.minimumWidth: 64
                                         horizontalAlignment: Text.AlignRight
                                     }
                                     Text {
-                                        text: modelData.precipProb + "%"
+                                        text: modelData.precipProb > 0 
+                                              ? (modelData.precipType ? modelData.precipType + " " : "") + modelData.precipProb + "%"
+                                              : "-"
                                         color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
                                         font.pixelSize: parent.parent.parent.parent.baseFontSize * 0.85
-                                        Layout.preferredWidth: 36
+                                        Layout.preferredWidth: 110
+                                        Layout.minimumWidth: 110
                                         horizontalAlignment: Text.AlignRight
+                                        elide: Text.ElideRight
                                     }
                                 }
                             }
@@ -1761,7 +1845,7 @@ Window {
                 Layout.fillWidth: true; spacing: 10
                 Label { text: "Provider"; color: root.ncText }
                 ComboBox {
-                    model: ["Open-Meteo (free, no key)", "OpenWeatherMap (free key required)"]
+                    model: ["Open-Meteo (free, no key)", "OpenWeatherMap (free key required)", "NOAA (US only, free)", "MET Norway (free, no key)"]
                     currentIndex: weatherManager.provider
                     onActivated: { weatherManager.provider = currentIndex; weatherManager.saveSettings() }
                 }
@@ -1777,6 +1861,17 @@ Window {
                     text: weatherManager.locationQuery
                     placeholderText: "City name or latitude,longitude"
                     onEditingFinished: { weatherManager.locationQuery = text; weatherManager.saveSettings() }
+                }
+                BusyIndicator {
+                    visible: weatherManager.locationDetecting
+                    running: weatherManager.locationDetecting
+                    implicitWidth: 24; implicitHeight: 24
+                }
+                Button {
+                    text: "Detect"
+                    visible: !weatherManager.locationDetecting
+                    enabled: !weatherManager.busy
+                    onClicked: weatherManager.detectLocation()
                 }
             }
 

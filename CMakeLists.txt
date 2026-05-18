@@ -17,6 +17,10 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt6 QUIET COMPONENTS Core Gui Qml Quick Network Svg Xml Widgets)
 if (Qt6_FOUND)
     set(QT_PACKAGE Qt6)
+    find_package(Qt6Positioning QUIET)
+    if (Qt6Positioning_FOUND)
+        message(STATUS "Qt6 Positioning found -- GeoClue location detection enabled")
+    endif()
 else()
     find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Network Svg Xml Widgets)
     set(QT_PACKAGE Qt5)
@@ -42,6 +46,11 @@ target_link_libraries(CalDisplay PRIVATE
     ${QT_PACKAGE}::Widgets
     ${QT_PACKAGE}::Xml
 )
+
+if (Qt6Positioning_FOUND)
+    target_compile_definitions(CalDisplay PRIVATE HAS_QT_POSITIONING)
+    target_link_libraries(CalDisplay PRIVATE Qt6::Positioning)
+endif()
 
 # Keep QML external for easy iteration on low-power systems.
 if (WIN32)

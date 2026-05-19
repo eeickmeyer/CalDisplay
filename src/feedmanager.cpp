@@ -556,14 +556,13 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         if (*pending != 0) {
             return;
         }
-
         QList<CalendarEvent> filtered;
         filtered.reserve(mergedEvents->size());
 
         const QDateTime now = QDateTime::currentDateTime();
         const QDate today = now.date();
         const QDateTime oldest = QDateTime(QDate(today.year(), today.month(), 1).addMonths(-1), QTime(0, 0));
-        const QDateTime newest = now.addDays(60);
+        const QDateTime newest = QDateTime(today.addDays(365), QTime(23, 59, 59));
 
         for (const CalendarEvent& ev : *mergedEvents) {
             if (ev.end >= oldest && ev.start <= newest) {

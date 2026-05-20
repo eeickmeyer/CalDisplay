@@ -412,6 +412,7 @@ Window {
             if (!root.isSameDate(now, root.currentDate)) {
                 root.currentDate = now
                 root.refreshEventData()
+                weatherManager.refreshWeather()
             }
         }
     }
@@ -428,6 +429,7 @@ Window {
                     root.currentDate = now
                     root.refreshEventData()
                 }
+                weatherManager.refreshWeather()
             }
         }
     }

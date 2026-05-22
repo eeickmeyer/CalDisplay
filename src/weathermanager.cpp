@@ -341,6 +341,8 @@ void WeatherManager::setRefreshIntervalMinutes(int v) {
 void WeatherManager::setBusy(bool v) {
     if (m_busy == v) return;
     m_busy = v;
+    if (!m_busy)
+        m_refreshStartedAtUtc = QDateTime();
     emit busyChanged();
 }
 
@@ -404,8 +406,20 @@ void WeatherManager::refreshWeather() {
         setStatus(QStringLiteral("Configure a location in Settings."));
         return;
     }
-    if (m_busy) return;
+
+    if (m_busy) {
+        const QDateTime nowUtc = QDateTime::currentDateTimeUtc();
+        const bool refreshTimedOut = !m_refreshStartedAtUtc.isValid()
+                                     || m_refreshStartedAtUtc.secsTo(nowUtc) >= 120;
+        if (!refreshTimedOut)
+            return;
+
+        setBusy(false);
+        setStatus(QStringLiteral("Previous weather refresh timed out. Retrying."));
+    }
+
     setBusy(true);
+    m_refreshStartedAtUtc = QDateTime::currentDateTimeUtc();
     setStatus(QStringLiteral("Updating…"));
 
     // Check if location looks like "lat,lon"

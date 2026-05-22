@@ -22,6 +22,7 @@ Window {
     property bool setupOpen: windowedMode
     property string currentTime: root.formatClockTime(new Date())
     property var currentDate: new Date()
+    property double lastClockTickMs: 0
     readonly property string ncPrimary: "#0082c9"
     readonly property string ncPrimaryStrong: "#0073b1"
     readonly property string ncAccent: "#2daee0"
@@ -336,6 +337,7 @@ Window {
     }
 
     Component.onCompleted: {
+        root.lastClockTickMs = (new Date()).getTime()
         refreshEventData()
         if (!windowedMode) startCycle()
     }
@@ -401,7 +403,20 @@ Window {
     // ── Timers ────────────────────────────────────────────────────
     Timer {
         interval: 1000; running: true; repeat: true
-        onTriggered: root.currentTime = root.formatClockTime(new Date())
+        onTriggered: {
+            var now = new Date()
+            var nowMs = now.getTime()
+
+            // Detect a large timer gap to catch resume-from-suspend reliably.
+            if (root.lastClockTickMs > 0 && (nowMs - root.lastClockTickMs) > 70000) {
+                root.currentDate = now
+                root.refreshEventData()
+                weatherManager.refreshWeather()
+            }
+
+            root.lastClockTickMs = nowMs
+            root.currentTime = root.formatClockTime(now)
+        }
     }
 
     Timer {

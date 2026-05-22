@@ -10,6 +10,7 @@
 #pragma once
 
 #include <QDate>
+#include <QDateTime>
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -114,6 +115,7 @@ private:
 
     // ── Runtime state ─────────────────────────────────────────────────────────
     bool    m_busy         = false;
+    QDateTime m_refreshStartedAtUtc;
     QString m_statusMessage;
 
     // NOAA intermediate state

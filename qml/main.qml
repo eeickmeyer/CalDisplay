@@ -407,11 +407,16 @@ Window {
             var now = new Date()
             var nowMs = now.getTime()
 
+            // Run staleness checks continuously; each manager decides whether
+            // enough time has elapsed before issuing a real network refresh.
+            feedManager.refreshFeedsIfDue()
+            weatherManager.refreshWeatherIfDue()
+
             // Detect a large timer gap to catch resume-from-suspend reliably.
             if (root.lastClockTickMs > 0 && (nowMs - root.lastClockTickMs) > 70000) {
                 root.currentDate = now
                 root.refreshEventData()
-                weatherManager.refreshWeather()
+                weatherManager.refreshWeatherIfDue()
             }
 
             root.lastClockTickMs = nowMs
@@ -427,7 +432,7 @@ Window {
             if (!root.isSameDate(now, root.currentDate)) {
                 root.currentDate = now
                 root.refreshEventData()
-                weatherManager.refreshWeather()
+                weatherManager.refreshWeatherIfDue()
             }
         }
     }
@@ -444,7 +449,7 @@ Window {
                     root.currentDate = now
                     root.refreshEventData()
                 }
-                weatherManager.refreshWeather()
+                weatherManager.refreshWeatherIfDue()
             }
         }
     }

@@ -1,6 +1,6 @@
 # CalDisplay
 
-CalDisplay is a Qt/QML calendar and clock display designed for wall screens and low-power Linux hardware.
+CalDisplay is a Qt/QML calendar, weather, and clock display designed for wall screens and low-power Linux hardware.
 
 It runs in two modes:
 - Windowed mode for setup and configuration
@@ -16,6 +16,8 @@ Both modes support calendar views and the Weather tab.
 - Direct local `.ics` file import by path or `file://` URL
 - Multiple feed entries with optional custom calendar names
 - Automatic feed refresh with configurable interval
+- Automatic weather refresh with configurable interval
+- Resume-aware stale-data checks for both calendar and weather updates
 - Manual refresh from the UI
 - 12-hour / 24-hour / host-default time format selection
 - Sunday-first week option
@@ -36,7 +38,7 @@ Notes:
 - `webcal://` URLs are automatically converted to `https://`.
 - Nextcloud public share links like `https://<host>/index.php/apps/calendar/p/<token>` are automatically converted to `https://<host>/remote.php/dav/public-calendars/<token>?export`.
 - Parser support currently focuses on VEVENT fields: `SUMMARY`, `DTSTART`, `DTEND`, and `STATUS`.
-- Events are filtered to a display window from the start of the previous month through 60 days ahead.
+- Events are filtered to a display window from the start of the previous month through 365 days ahead.
 
 ## Snap Build and Install
 
@@ -50,7 +52,7 @@ snapcraft pack
 Install local snap:
 
 ```bash
-sudo snap install --dangerous ./caldisplay_1.0.0_amd64.snap
+sudo snap install --dangerous ./caldisplay_1.1.0_amd64.snap
 ```
 
 Allow browsing removable media with the native file picker:

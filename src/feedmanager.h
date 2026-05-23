@@ -50,6 +50,7 @@ public:
 
     Q_INVOKABLE void saveSettings();
     Q_INVOKABLE void refreshFeeds();
+    Q_INVOKABLE void refreshFeedsIfDue();
     Q_INVOKABLE QString pickLocalIcsFile() const;
 
 signals:

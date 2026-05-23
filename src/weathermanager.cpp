@@ -450,6 +450,21 @@ void WeatherManager::refreshWeather() {
         geocodeOpenMeteo();
 }
 
+void WeatherManager::refreshWeatherIfDue() {
+    if (!configured() || !m_autoRefreshEnabled)
+        return;
+
+    const QDateTime nowUtc = QDateTime::currentDateTimeUtc();
+    if (!m_lastSuccessfulRefreshUtc.isValid()) {
+        refreshWeather();
+        return;
+    }
+
+    const int intervalSeconds = qMax(5, m_refreshIntervalMinutes) * 60;
+    if (m_lastSuccessfulRefreshUtc.secsTo(nowUtc) >= intervalSeconds)
+        refreshWeather();
+}
+
 void WeatherManager::doFetch() {
     if (m_provider == OpenWeatherMap && !m_apiKey.isEmpty())
         fetchOWMCurrent();
@@ -898,6 +913,7 @@ void WeatherManager::buildWeatherData() {
     m_dailyForecast = daily;
 
     const QString ts = QTime::currentTime().toString(QStringLiteral("HH:mm"));
+    m_lastSuccessfulRefreshUtc = QDateTime::currentDateTimeUtc();
     setStatus(QStringLiteral("Updated ") + ts);
     emit weatherUpdated();
 }

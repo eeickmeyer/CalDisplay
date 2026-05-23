@@ -81,6 +81,7 @@ public:
     bool    locationDetecting()     const;
 
     Q_INVOKABLE void refreshWeather();
+    Q_INVOKABLE void refreshWeatherIfDue();
     Q_INVOKABLE void saveSettings();
     Q_INVOKABLE void loadSettings();
     Q_INVOKABLE void detectLocation();
@@ -116,6 +117,7 @@ private:
     // ── Runtime state ─────────────────────────────────────────────────────────
     bool    m_busy         = false;
     QDateTime m_refreshStartedAtUtc;
+    QDateTime m_lastSuccessfulRefreshUtc;
     QString m_statusMessage;
 
     // NOAA intermediate state

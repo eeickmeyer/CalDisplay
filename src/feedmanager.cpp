@@ -515,6 +515,23 @@ void FeedManager::refreshFeeds() {
     refreshFeedsInternal(true);
 }
 
+void FeedManager::refreshFeedsIfDue() {
+    if (!m_autoRefreshEnabled || normalizedEntryList().isEmpty()) {
+        return;
+    }
+
+    if (!m_lastSync.isValid()) {
+        refreshFeedsInternal(false);
+        return;
+    }
+
+    const QDateTime now = QDateTime::currentDateTime();
+    const int intervalSeconds = std::clamp(m_refreshIntervalMinutes, 1, 180) * 60;
+    if (m_lastSync.secsTo(now) >= intervalSeconds) {
+        refreshFeedsInternal(false);
+    }
+}
+
 QString FeedManager::pickLocalIcsFile() const {
     return QFileDialog::getOpenFileName(nullptr,
                                         tr("Choose an ICS file"),

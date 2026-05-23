@@ -1,17 +1,19 @@
 name: caldisplay
 base: core24
-version: '1.0.0'
+version: '1.1.0'
 icon: assets/caldisplay.svg
 summary: Family calendar and clock display
 title: CalDisplay
 description: |
-  A calendar and clock application for displaying family calendars
-  from ICS/webcal feeds. Perfect for wall-mounted displays.
+  A calendar, weather, and clock display application for family dashboards,
+  wall-mounted screens, and other always-on displays.
   
   Features:
-  - Read-only calendar feed support (ICS, webcal)
+  - Read-only calendar feed support (ICS, webcal, and local .ics files)
+  - Weather tab with current conditions and forecast
   - Real-time clock display
-  - Automatic periodic refresh
+  - Automatic refresh with configurable intervals
+  - Resume-aware stale-data checks to catch up after suspend
   - Dual launch modes: full-screen kiosk and windowed configuration
   - Optimized for low-power hardware (Lubuntu compatible)
 

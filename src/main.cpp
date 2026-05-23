@@ -8,17 +8,39 @@
 // (at your option) any later version.
 
 #include <QApplication>
+#include <QDateTime>
 #include <QIcon>
+#include <QObject>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
 #include <QStandardPaths>
 #include <QFileInfo>
 #include <QStringList>
+#include <QTimer>
 
 #include "eventmodel.h"
 #include "feedmanager.h"
 #include "weathermanager.h"
+
+namespace {
+
+void schedulePostResumeRefresh(WeatherManager* weatherManager,
+                               FeedManager* feedManager,
+                               qint64* lastRefreshMs,
+                               int settleDelayMs = 1500) {
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (*lastRefreshMs > 0 && (nowMs - *lastRefreshMs) < 5000)
+        return;
+    *lastRefreshMs = nowMs;
+
+    QTimer::singleShot(settleDelayMs, weatherManager, [weatherManager, feedManager]() {
+        weatherManager->refreshWeatherIfDue();
+        feedManager->refreshFeedsIfDue();
+    });
+}
+
+} // namespace
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
@@ -44,6 +66,14 @@ int main(int argc, char* argv[]) {
     EventModel model;
     FeedManager feedManager(&model);
     WeatherManager weatherManager;
+    qint64 lastResumeRefreshMs = 0;
+
+    QObject::connect(&app, &QGuiApplication::applicationStateChanged,
+                     &app, [&](Qt::ApplicationState state) {
+        if (state == Qt::ApplicationActive) {
+            schedulePostResumeRefresh(&weatherManager, &feedManager, &lastResumeRefreshMs);
+        }
+    });
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("eventModel", &model);

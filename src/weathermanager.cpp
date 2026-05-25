@@ -29,6 +29,7 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QIcon>
+#include <QFile>
 #include <QFileInfo>
 #include <QPixmap>
 #include <QDirIterator>
@@ -196,8 +197,12 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
                               + QString::number(size)
                               + QStringLiteral(".png");
 
-    if (QFileInfo::exists(cachePath))
-        return QUrl::fromLocalFile(cachePath).toString();
+    QFileInfo cacheInfo(cachePath);
+    if (cacheInfo.exists()) {
+        if (cacheInfo.size() > 0)
+            return QUrl::fromLocalFile(cachePath).toString();
+        QFile::remove(cachePath);
+    }
 
     // Prefer Papirus colour icons (48x48/status) before falling back to the
     // system theme engine, which often resolves to symbolic panel variants.
@@ -209,7 +214,12 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
 
     // Only search colour-context directories; skip panel/symbolic ones.
     const QStringList colorDirs = {
+        QStringLiteral("64x64/status"),
         QStringLiteral("48x48/status"),
+        QStringLiteral("32x32/status"),
+        QStringLiteral("24x24/status"),
+        QStringLiteral("22x22/status"),
+        QStringLiteral("16x16/status"),
         QStringLiteral("scalable/status"),
     };
     const QStringList exts = { QStringLiteral(".png"), QStringLiteral(".xpm"), QStringLiteral(".svg") };
@@ -229,6 +239,30 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
                 }
                 return QUrl::fromLocalFile(candidate).toString();
             }
+        }
+
+        // Last manual fallback: recursively search Papirus for a matching icon
+        // while avoiding panel/symbolic variants.
+        QDirIterator it(root,
+                        QStringList() << (iconName + QStringLiteral(".png"))
+                                      << (iconName + QStringLiteral(".xpm"))
+                                      << (iconName + QStringLiteral(".svg")),
+                        QDir::Files,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString candidate = it.next();
+            if (candidate.contains(QStringLiteral("/panel/")))
+                continue;
+            if (candidate.contains(QStringLiteral("-symbolic")))
+                continue;
+
+            if (candidate.endsWith(QStringLiteral(".svg"))) {
+                const QString rendered = renderSvgToCachedPng(candidate, cachePath, size);
+                if (!rendered.isEmpty())
+                    return rendered;
+                continue;
+            }
+            return QUrl::fromLocalFile(candidate).toString();
         }
     }
 

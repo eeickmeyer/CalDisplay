@@ -1,5 +1,7 @@
 # CalDisplay
 
+[![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/caldisplay)
+
 CalDisplay is a Qt/QML calendar, weather, and clock display designed for wall screens and low-power Linux hardware.
 
 It runs in two modes:

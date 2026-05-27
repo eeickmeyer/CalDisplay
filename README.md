@@ -10,6 +10,8 @@ It runs in two modes:
 
 Both modes support calendar views and the Weather tab.
 
+This was created to be a family calendar display, but other use cases could be as a coprporate or collegiate event calendar display, conference room use calendar display, etc.
+
 ## Features
 
 - Day, Week, Month, and Two-Month views

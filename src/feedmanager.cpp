@@ -73,6 +73,56 @@ QDateTime parseIcsDateTime(const QString& rawValue) {
     return local;
 }
 
+QString extractTzidFromProperty(const QString& propertyNameWithParams) {
+    const QStringList parts = propertyNameWithParams.split(';', Qt::SkipEmptyParts);
+    for (int i = 1; i < parts.size(); ++i) {
+        const QString part = parts.at(i).trimmed();
+        if (!part.startsWith("TZID=", Qt::CaseInsensitive)) {
+            continue;
+        }
+
+        QString tzid = part.mid(5).trimmed();
+        if (tzid.size() >= 2 && tzid.startsWith('"') && tzid.endsWith('"')) {
+            tzid = tzid.mid(1, tzid.size() - 2);
+        }
+        return tzid;
+    }
+    return {};
+}
+
+QDateTime parseIcsDateTimeWithTzid(const QString& rawValue, const QString& tzid) {
+    const QString value = rawValue.trimmed();
+    if (value.isEmpty()) {
+        return {};
+    }
+
+    if (value.size() == 8) {
+        return parseIcsDateTime(value);
+    }
+
+    if (value.endsWith('Z')) {
+        return parseIcsDateTime(value);
+    }
+
+    QDateTime parsed = QDateTime::fromString(value, "yyyyMMdd'T'HHmmss");
+    if (!parsed.isValid()) {
+        parsed = QDateTime::fromString(value, "yyyyMMdd'T'HHmm");
+    }
+    if (!parsed.isValid()) {
+        return {};
+    }
+
+    const QString normalizedTzid = tzid.trimmed();
+    if (!normalizedTzid.isEmpty()) {
+        QTimeZone zone(normalizedTzid.toUtf8());
+        if (zone.isValid()) {
+            return QDateTime(parsed.date(), parsed.time(), zone).toLocalTime();
+        }
+    }
+
+    return parsed;
+}
+
 QString unfoldIcs(const QByteArray& data) {
     QString text = QString::fromUtf8(data);
     text.replace("\r\n", "\n");
@@ -311,8 +361,10 @@ void appendIcsEvents(const QByteArray& body,
     QString summary;
     QString dtStartRaw;
     QString dtEndRaw;
+    QString dtStartTzid;
+    QString dtEndTzid;
     QString rruleRaw;
-    QStringList exDateValues;
+    QList<QPair<QString, QString>> exDateValues;
     QString status = QStringLiteral("CONFIRMED");
 
     for (const QString& originalLine : lines) {
@@ -322,6 +374,8 @@ void appendIcsEvents(const QByteArray& body,
             summary.clear();
             dtStartRaw.clear();
             dtEndRaw.clear();
+            dtStartTzid.clear();
+            dtEndTzid.clear();
             rruleRaw.clear();
             exDateValues.clear();
             status = QStringLiteral("CONFIRMED");
@@ -334,8 +388,8 @@ void appendIcsEvents(const QByteArray& body,
                 ev.title = summary.isEmpty() ? QStringLiteral("(No title)") : summary;
                 ev.calendar = source;
                 ev.color = color;
-                ev.start = parseIcsDateTime(dtStartRaw);
-                ev.end = parseIcsDateTime(dtEndRaw);
+                ev.start = parseIcsDateTimeWithTzid(dtStartRaw, dtStartTzid);
+                ev.end = parseIcsDateTimeWithTzid(dtEndRaw, dtEndTzid);
                 ev.status = status;
                 if (!ev.start.isValid()) {
                     inEvent = false;
@@ -346,8 +400,8 @@ void appendIcsEvents(const QByteArray& body,
                 }
                 if (!rruleRaw.isEmpty()) {
                     QSet<QDate> exDates;
-                    for (const QString& ex : exDateValues) {
-                        const QDateTime exDt = parseIcsDateTime(ex);
+                    for (const auto& ex : exDateValues) {
+                        const QDateTime exDt = parseIcsDateTimeWithTzid(ex.first, ex.second);
                         if (exDt.isValid()) exDates.insert(exDt.date());
                     }
                     expandRecurrences(ev, rruleRaw, exDates, mergedEvents);
@@ -368,8 +422,10 @@ void appendIcsEvents(const QByteArray& body,
             continue;
         }
 
-        QString key = line.left(colon).trimmed().toUpper();
+        const QString propertyWithParams = line.left(colon).trimmed();
+        QString key = propertyWithParams.toUpper();
         const QString value = line.mid(colon + 1).trimmed();
+        const QString tzid = extractTzidFromProperty(propertyWithParams);
 
         const int semi = key.indexOf(';');
         if (semi > 0) {
@@ -380,12 +436,17 @@ void appendIcsEvents(const QByteArray& body,
             summary = value;
         } else if (key == "DTSTART") {
             dtStartRaw = value;
+            dtStartTzid = tzid;
         } else if (key == "DTEND") {
             dtEndRaw = value;
+            dtEndTzid = tzid;
         } else if (key == "RRULE") {
             rruleRaw = value;
         } else if (key == "EXDATE") {
-            exDateValues.append(value.split(',', Qt::SkipEmptyParts));
+            const QStringList exList = value.split(',', Qt::SkipEmptyParts);
+            for (const QString& ex : exList) {
+                exDateValues.append({ex.trimmed(), tzid});
+            }
         } else if (key == "STATUS") {
             status = value.toUpper();
         }

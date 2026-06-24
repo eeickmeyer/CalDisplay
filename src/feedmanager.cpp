@@ -509,14 +509,19 @@ QString normalizeVisibleViews(const QString& raw) {
 
 QHash<QString, QString> buildSourceColorMap(const QStringList& sources) {
     static const QStringList basePalette = {
-        QStringLiteral("#0082c9"),
-        QStringLiteral("#2daee0"),
-        QStringLiteral("#4cb9c5"),
-        QStringLiteral("#66bb6a"),
-        QStringLiteral("#f4b13d"),
-        QStringLiteral("#f28c38"),
-        QStringLiteral("#e35d6a"),
-        QStringLiteral("#9c6ade")
+        // High-separation defaults to avoid adjacent feeds looking too similar.
+        QStringLiteral("#d62728"), // red
+        QStringLiteral("#2ca02c"), // green
+        QStringLiteral("#1f77b4"), // blue
+        QStringLiteral("#ff7f0e"), // orange
+        QStringLiteral("#9467bd"), // purple
+        QStringLiteral("#17becf"), // cyan
+        QStringLiteral("#8c564b"), // brown
+        QStringLiteral("#e377c2"), // magenta
+        QStringLiteral("#bcbd22"), // olive
+        QStringLiteral("#7f7f7f"), // gray
+        QStringLiteral("#e41a1c"), // deep red
+        QStringLiteral("#4daf4a")  // vivid green
     };
 
     QHash<QString, QString> assigned;
@@ -535,8 +540,11 @@ QHash<QString, QString> buildSourceColorMap(const QStringList& sources) {
             // Generate additional distinct colors after the base palette is exhausted.
             int attempt = 0;
             do {
-                const int hue = (nextIndex * 137 + attempt * 37) % 360;
-                const QColor generated = QColor::fromHsv(hue, 165, 224);
+                const int hue = (nextIndex * 137 + attempt * 29) % 360;
+                const int band = (nextIndex / basePalette.size() + attempt) % 3;
+                const int sat = (band == 0) ? 200 : (band == 1 ? 170 : 220);
+                const int val = (band == 0) ? 210 : (band == 1 ? 235 : 185);
+                const QColor generated = QColor::fromHsv(hue, sat, val);
                 color = generated.name(QColor::HexRgb);
                 ++attempt;
             } while (used.contains(color) && attempt < 360);

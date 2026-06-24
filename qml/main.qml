@@ -18,7 +18,7 @@ Window {
     visibility: windowedMode ? Window.Windowed : Window.FullScreen
     title: windowedMode ? "CalDisplay (Configuration)" : "CalDisplay"
     color: "#0f1f2f"
-    
+
     property bool setupOpen: windowedMode
     property string currentTime: root.formatClockTime(new Date())
     property var currentDate: new Date()
@@ -80,410 +80,364 @@ Window {
         return filtered
     }
     readonly property var calendarLegend: {
-        var seen = {}; var result = []
+        var seen = {}
+        var result = []
         for (var i = 0; i < allEvents.length; i++) {
             var ev = allEvents[i]
-            if (!seen[ev.calendar]) { seen[ev.calendar] = true; result.push({name: ev.calendar, color: ev.color}) }
-
-            TabBar {
-                id: settingsTabBar
-                Layout.fillWidth: true
-
-                TabButton { text: "Calendars" }
-                TabButton { text: "Weather" }
+            if (!seen[ev.calendar]) {
+                seen[ev.calendar] = true
+                result.push({name: ev.calendar, color: ev.color})
             }
+        }
+        return result
+    }
 
-            StackLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                currentIndex: settingsTabBar.currentIndex
+    function refreshEventData() {
+        allEvents = eventModel.getEvents()
+    }
 
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+    function hexToRgb(colorString) {
+        var hex = (colorString || "").toString().trim()
+        if (hex.charAt(0) === "#")
+            hex = hex.slice(1)
 
-                    ScrollView {
-                        anchors.fill: parent
-                        clip: true
-
-                        ColumnLayout {
-                            width: Math.max(0, setupPanel.width - 36)
-                            spacing: 10
-
-                            Label { text: "Use shared ICS/webcal links or local .ics files."; color: root.ncMutedText; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-                            Label { text: "Calendars (Name | URL)"; color: root.ncText }
-
-                            ScrollView {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: Math.min(feedListModel.count * 54 + 10, 220)
-                                clip: true
-                                ListView {
-                                    id: feedListView
-                                    model: feedListModel
-                                    spacing: 8
-                                    delegate: RowLayout {
-                                        width: feedListView.width
-                                        spacing: 6
-                                        TextField {
-                                            text: model.name; placeholderText: "Name"
-                                            implicitWidth: 130
-                                            onTextEdited: feedListModel.setProperty(index, "name", text)
-                                        }
-                                        TextField {
-                                            text: model.url; placeholderText: "webcal://, https://, /path/file.ics, or file:///..."
-                                            Layout.fillWidth: true
-                                            onTextEdited: feedListModel.setProperty(index, "url", text)
-                                        }
-                                        Button {
-                                            text: "Browse"
-                                            onClicked: {
-                                                var selectedPath = feedManager.pickLocalIcsFile()
-                                                if (!selectedPath)
-                                                    return
-
-                                                feedListModel.setProperty(index, "url", selectedPath)
-                                                var currentItem = feedListModel.get(index)
-                                                var currentName = (currentItem.name || "").trim()
-                                                if (!currentName) {
-                                                    var name = root.feedNameFromLocation(selectedPath)
-                                                    feedListModel.setProperty(index, "name", name)
-                                                }
-                                            }
-                                        }
-                                        Button {
-                                            text: "✕"; implicitWidth: 36
-                                            onClicked: feedListModel.remove(index)
-                                        }
-                                    }
-                                }
-                            }
-
-                            Button {
-                                text: "+ Add Calendar"; Layout.alignment: Qt.AlignLeft
-                                onClicked: feedListModel.append({name: "", url: ""})
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Button {
-                                    text: "Save"; enabled: !feedManager.busy
-                                    onClicked: { feedManager.feedUrls = root.serializeFeedList(); feedManager.saveSettings() }
-                                }
-                                Button {
-                                    text: feedManager.busy ? "Refreshing..." : "Refresh Feeds"; enabled: !feedManager.busy
-                                    onClicked: { feedManager.feedUrls = root.serializeFeedList(); feedManager.saveSettings(); feedManager.refreshFeeds() }
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Automatic refresh"; color: root.ncText }
-                                Switch {
-                                    id: autoRefreshSwitch; checked: feedManager.autoRefreshEnabled; enabled: !feedManager.busy
-                                    onToggled: { feedManager.autoRefreshEnabled = checked; feedManager.saveSettings() }
-                                }
-                                Label { text: "Every"; color: root.ncText }
-                                SpinBox {
-                                    id: refreshIntervalSpin; from: 1; to: 180; value: feedManager.refreshIntervalMinutes; editable: true
-                                    enabled: !feedManager.busy && autoRefreshSwitch.checked
-                                    onValueModified: { feedManager.refreshIntervalMinutes = value; feedManager.saveSettings() }
-                                }
-                                Label { text: "min"; color: root.ncText }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Display name"; color: root.ncText }
-                                TextField {
-                                    id: displayNameField
-                                    Layout.fillWidth: true
-                                    text: feedManager.displayName
-                                    placeholderText: "Family Calendar"
-                                    enabled: !feedManager.busy
-                                    onEditingFinished: {
-                                        feedManager.displayName = text
-                                        feedManager.saveSettings()
-                                    }
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Time format"; color: root.ncText }
-                                Switch {
-                                    id: timeFormatSwitch
-                                    checked: !root.use12HourClock
-                                    enabled: !feedManager.busy
-                                    onClicked: {
-                                        feedManager.timeFormatPreference = checked ? 2 : 1
-                                        root.currentTime = root.formatClockTime(new Date())
-                                        feedManager.saveSettings()
-                                    }
-                                }
-                                Label { text: timeFormatSwitch.checked ? "24-hour" : "12-hour"; color: root.ncText }
-                                Button {
-                                    text: "Host default"
-                                    enabled: !feedManager.busy
-                                    onClicked: {
-                                        feedManager.timeFormatPreference = 0
-                                        root.currentTime = root.formatClockTime(new Date())
-                                        feedManager.saveSettings()
-                                    }
-                                }
-                                Item { Layout.fillWidth: true }
-                                Label {
-                                    text: root.use12HourClock ? "Preview: 9:05 PM" : "Preview: 21:05"
-                                    color: root.ncSubtleText
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Week starts Sunday"; color: root.ncText }
-                                Switch {
-                                    checked: feedManager.sundayFirst
-                                    enabled: !feedManager.busy
-                                    onToggled: {
-                                        feedManager.sundayFirst = checked
-                                        feedManager.saveSettings()
-                                    }
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "View cycle"; color: root.ncText }
-                                SpinBox {
-                                    from: 5; to: 300; value: root.viewCycleSecs; editable: true
-                                    onValueModified: { root.viewCycleSecs = value; viewCycleTimer.restart(); root.startCycle() }
-                                }
-                                Label { text: "sec"; color: root.ncText }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 6
-
-                                Label { text: "Visible tabs"; color: root.ncText }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 12
-
-                                    Repeater {
-                                        model: root.allViewDefs
-                                        delegate: CheckBox {
-                                            id: visibleTabCheck
-                                            text: modelData.label
-                                            checked: root.isViewEnabled(modelData.key)
-                                            onToggled: root.setViewEnabled(modelData.key, checked)
-
-                                            indicator: Rectangle {
-                                                implicitWidth: 18
-                                                implicitHeight: 18
-                                                radius: 3
-                                                color: visibleTabCheck.checked ? root.ncAccent : root.ncPanel
-                                                border.width: 1
-                                                border.color: root.ncBorder
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: visibleTabCheck.checked ? "✓" : ""
-                                                    color: "#ffffff"
-                                                    font.pixelSize: 12
-                                                    font.bold: true
-                                                }
-                                            }
-
-                                            contentItem: Text {
-                                                text: visibleTabCheck.text
-                                                color: root.ncText
-                                                font.pixelSize: 16
-                                                verticalAlignment: Text.AlignVCenter
-                                                leftPadding: visibleTabCheck.indicator.width + visibleTabCheck.spacing
-                                            }
-                                        }
-                                    }
-                                }
-                                Label {
-                                    text: "At least one tab must remain enabled."
-                                    color: root.ncSubtleText
-                                    font.pixelSize: 12
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 6
-
-                                Label { text: "Tab order"; color: root.ncText }
-                                Label {
-                                    text: "This order controls both tab display and auto-cycle order."
-                                    color: root.ncSubtleText
-                                    font.pixelSize: 12
-                                }
-
-                                Repeater {
-                                    model: root.visibleViewKeys
-                                    delegate: RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 8
-
-                                        Rectangle {
-                                            width: 8
-                                            height: 8
-                                            radius: 4
-                                            color: root.ncAccent
-                                        }
-
-                                        Label {
-                                            Layout.fillWidth: true
-                                            text: root.viewLabelForKey(modelData)
-                                            color: root.ncMutedText
-                                        }
-
-                                        Button {
-                                            text: "Up"
-                                            enabled: index > 0
-                                            onClicked: root.moveVisibleView(index, index - 1)
-                                        }
-
-                                        Button {
-                                            text: "Down"
-                                            enabled: index < (root.visibleViewKeys.length - 1)
-                                            onClicked: root.moveVisibleView(index, index + 1)
-                                        }
-                                    }
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true; color: root.ncPanel; radius: 8
-                                border.width: 1; border.color: root.ncBorder
-                                implicitHeight: roStatusText.implicitHeight + 16
-                                Text {
-                                    id: roStatusText; anchors.fill: parent; anchors.margins: 8
-                                    text: feedManager.statusMessage; color: root.ncMutedText; wrapMode: Text.WordWrap; font.pixelSize: 16
-                                }
-                            }
-
-                            Item { Layout.fillHeight: true }
-                        }
-                    }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-
-                    ScrollView {
-                        anchors.fill: parent
-                        clip: true
-
-                        ColumnLayout {
-                            width: Math.max(0, setupPanel.width - 36)
-                            spacing: 10
-
-                            Text { text: "Weather"; color: root.ncText; font.pixelSize: 22; font.bold: true }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Provider"; color: root.ncText }
-                                ComboBox {
-                                    model: ["Open-Meteo (free, no key)", "OpenWeatherMap (free key required)", "NOAA (US only, free)", "MET Norway (free, no key)"]
-                                    currentIndex: weatherManager.provider
-                                    onActivated: { weatherManager.provider = currentIndex; weatherManager.saveSettings() }
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Location"; color: root.ncText }
-                                TextField {
-                                    id: weatherLocationField
-                                    Layout.fillWidth: true
-                                    text: weatherManager.locationQuery
-                                    placeholderText: "City name or latitude,longitude"
-                                    onEditingFinished: { weatherManager.locationQuery = text; weatherManager.saveSettings() }
-                                }
-                                BusyIndicator {
-                                    visible: weatherManager.locationDetecting
-                                    running: weatherManager.locationDetecting
-                                    implicitWidth: 24; implicitHeight: 24
-                                }
-                                Button {
-                                    text: "Detect"
-                                    visible: !weatherManager.locationDetecting
-                                    enabled: !weatherManager.busy
-                                    onClicked: weatherManager.detectLocation()
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                visible: weatherManager.provider === 1
-                                Label { text: "API key"; color: root.ncText }
-                                TextField {
-                                    Layout.fillWidth: true
-                                    text: weatherManager.apiKey
-                                    placeholderText: "OpenWeatherMap API key"
-                                    echoMode: TextInput.Password
-                                    onEditingFinished: { weatherManager.apiKey = text; weatherManager.saveSettings() }
-                                }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Weather units"; color: root.ncText }
-                                ComboBox {
-                                    model: ["Metric (\u00B0C, km/h)", "Imperial (\u00B0F, mph)"]
-                                    currentIndex: weatherManager.temperatureUnit
-                                    onActivated: { weatherManager.temperatureUnit = currentIndex; weatherManager.saveSettings() }
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Label { text: "Auto-refresh"; color: root.ncText }
-                                Switch {
-                                    id: weatherAutoRefreshSwitch
-                                    checked: weatherManager.autoRefreshEnabled
-                                    onToggled: { weatherManager.autoRefreshEnabled = checked; weatherManager.saveSettings() }
-                                }
-                                Label { text: "Every"; color: root.ncText }
-                                SpinBox {
-                                    from: 5; to: 180; value: weatherManager.refreshIntervalMinutes; editable: true
-                                    enabled: weatherAutoRefreshSwitch.checked
-                                    onValueModified: { weatherManager.refreshIntervalMinutes = value; weatherManager.saveSettings() }
-                                }
-                                Label { text: "min"; color: root.ncText }
-                                Item { Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 10
-                                Button {
-                                    text: weatherManager.busy ? "Fetching\u2026" : "Fetch Now"
-                                    enabled: !weatherManager.busy && weatherManager.configured
-                                    onClicked: weatherManager.refreshWeather()
-                                }
-                                Label {
-                                    text: weatherManager.statusMessage
-                                    color: root.ncSubtleText; font.pixelSize: 14
-                                    Layout.fillWidth: true; elide: Text.ElideRight
-                                }
-                            }
-
-                            Item { Layout.fillHeight: true }
-                        }
-                    }
-                }
+        if (hex.length === 3) {
+            return {
+                r: parseInt(hex.charAt(0) + hex.charAt(0), 16),
+                g: parseInt(hex.charAt(1) + hex.charAt(1), 16),
+                b: parseInt(hex.charAt(2) + hex.charAt(2), 16)
             }
+        }
+
+        if (hex.length === 6 || hex.length === 8) {
+            var offset = hex.length === 8 ? 2 : 0
+            return {
+                r: parseInt(hex.substr(offset, 2), 16),
+                g: parseInt(hex.substr(offset + 2, 2), 16),
+                b: parseInt(hex.substr(offset + 4, 2), 16)
+            }
+        }
+
+        return null
+    }
+
+    function relativeLuminance(rgb) {
+        function channelToLinear(v) {
+            var c = v / 255.0
+            return c <= 0.03928 ? (c / 12.92) : Math.pow((c + 0.055) / 1.055, 2.4)
+        }
+
+        var r = channelToLinear(rgb.r)
+        var g = channelToLinear(rgb.g)
+        var b = channelToLinear(rgb.b)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    function compositeRgb(fgColor, fgAlpha, bgColor) {
+        var fg = root.hexToRgb(fgColor)
+        var bg = root.hexToRgb(bgColor)
+        if (!fg)
+            return bg
+        if (!bg)
+            return fg
+
+        var a = Math.max(0.0, Math.min(1.0, fgAlpha))
+        return {
+            r: Math.round((fg.r * a) + (bg.r * (1.0 - a))),
+            g: Math.round((fg.g * a) + (bg.g * (1.0 - a))),
+            b: Math.round((fg.b * a) + (bg.b * (1.0 - a)))
+        }
+    }
+
+    function useBlackTextOnColor(colorString, alpha, underColor) {
+        var rgb = (alpha !== undefined && underColor)
+                ? root.compositeRgb(colorString, alpha, underColor)
+                : root.hexToRgb(colorString)
+        if (!rgb)
+            return false
+
+        var lum = root.relativeLuminance(rgb)
+        var contrastWhite = (1.0 + 0.05) / (lum + 0.05)
+        var contrastBlack = (lum + 0.05) / (0.0 + 0.05)
+        return contrastBlack > contrastWhite
+    }
+
+    function eventTitleColor(eventColor, alpha, underColor) {
+        return root.useBlackTextOnColor(eventColor, alpha, underColor) ? "#111111" : "#ffffff"
+    }
+
+    function eventMetaColor(eventColor, alpha, underColor) {
+        return root.useBlackTextOnColor(eventColor, alpha, underColor) ? "#111111" : "#ffffff"
+    }
+
+    function parseVisibleViews(raw) {
+        var allowed = ["day", "week", "month", "twomonths", "weather"]
+        var keys = []
+        var input = (raw || "").split(",")
+        for (var i = 0; i < input.length; i++) {
+            var k = input[i].trim().toLowerCase()
+            if (!k || allowed.indexOf(k) === -1 || keys.indexOf(k) !== -1)
+                continue
+            keys.push(k)
+        }
+        if (keys.length === 0)
+            keys.push("day")
+        return keys
+    }
+
+    function serializeVisibleViews(keys) {
+        return keys.join(",")
+    }
+
+    function viewDefForKey(key) {
+        for (var i = 0; i < root.allViewDefs.length; i++) {
+            if (root.allViewDefs[i].key === key)
+                return root.allViewDefs[i]
+        }
+        return null
+    }
+
+    function viewLabelForKey(key) {
+        var def = root.viewDefForKey(key)
+        return def ? def.label : key
+    }
+
+    function isViewEnabled(key) {
+        return root.visibleViewKeys.indexOf(key) !== -1
+    }
+
+    function firstEnabledViewIndex() {
+        return root.activeViews.length > 0 ? root.activeViews[0].index : 0
+    }
+
+    function ensureCurrentViewEnabled() {
+        var enabled = false
+        for (var i = 0; i < root.activeViews.length; i++) {
+            if (root.activeViews[i].index === root.currentView) {
+                enabled = true
+                break
+            }
+        }
+        if (!enabled)
+            root.currentView = root.firstEnabledViewIndex()
+    }
+
+    function nextEnabledViewIndex(fromIndex) {
+        if (root.activeViews.length === 0)
+            return 0
+
+        var currentPos = -1
+        for (var i = 0; i < root.activeViews.length; i++) {
+            if (root.activeViews[i].index === fromIndex) {
+                currentPos = i
+                break
+            }
+        }
+
+        if (currentPos === -1)
+            return root.activeViews[0].index
+
+        return root.activeViews[(currentPos + 1) % root.activeViews.length].index
+    }
+
+    function setViewEnabled(key, enabled) {
+        var keys = root.visibleViewKeys.slice(0)
+        var idx = keys.indexOf(key)
+
+        if (enabled) {
+            if (idx === -1)
+                keys.push(key)
+        } else {
+            if (idx === -1 || keys.length <= 1)
+                return
+            keys.splice(idx, 1)
+        }
+
+        feedManager.visibleViews = root.serializeVisibleViews(keys)
+        feedManager.saveSettings()
+        root.ensureCurrentViewEnabled()
+        viewCycleTimer.restart()
+        root.startCycle()
+    }
+
+    function moveVisibleView(fromIndex, toIndex) {
+        var keys = root.visibleViewKeys.slice(0)
+        if (fromIndex < 0 || fromIndex >= keys.length)
+            return
+        if (toIndex < 0 || toIndex >= keys.length)
+            return
+        if (fromIndex === toIndex)
+            return
+
+        var moved = keys.splice(fromIndex, 1)[0]
+        keys.splice(toIndex, 0, moved)
+
+        feedManager.visibleViews = root.serializeVisibleViews(keys)
+        feedManager.saveSettings()
+        root.ensureCurrentViewEnabled()
+        viewCycleTimer.restart()
+        root.startCycle()
+    }
+
+    function startCycle() {
+        cycleProgress = 0
+        progressAnim.restart()
+    }
+
+    function isSameDate(a, b) {
+        return a.getFullYear() === b.getFullYear() &&
+               a.getMonth() === b.getMonth() &&
+               a.getDate() === b.getDate()
+    }
+
+    function dayStartMs(dayDate) {
+        var d = new Date(dayDate)
+        d.setHours(0, 0, 0, 0)
+        return d.getTime()
+    }
+
+    function formatEventTime(dateObj) {
+        return Qt.formatTime(dateObj, root.eventTimePattern)
+    }
+
+    function formatClockTime(dateObj) {
+        return Qt.formatTime(dateObj, root.clockTimePattern)
+    }
+
+    function formatTimelineHour(hour) {
+        if (root.use12HourClock) {
+            var h = hour % 12
+            if (h === 0)
+                h = 12
+            return h + (hour < 12 ? " AM" : " PM")
+        }
+        return (hour < 10 ? "0" : "") + hour + ":00"
+    }
+
+    function isTentativeEvent(eventObj) {
+        var status = (eventObj && eventObj.status ? eventObj.status : "").toString().toUpperCase()
+        return status === "TENTATIVE"
+    }
+
+    function isAllDayEvent(eventObj) {
+        var start = new Date(eventObj.startMs)
+        var end = new Date(eventObj.endMs)
+        var duration = eventObj.endMs - eventObj.startMs
+        var wholeDays = duration > 0 && (duration % (24 * 60 * 60 * 1000) === 0)
+        return start.getHours() === 0 && start.getMinutes() === 0 &&
+               end.getHours() === 0 && end.getMinutes() === 0 && wholeDays
+    }
+
+    function eventsForDay(dayDate) {
+        var startMs = root.dayStartMs(dayDate)
+        var endMs = startMs + (24 * 60 * 60 * 1000)
+        var out = []
+        for (var i = 0; i < allEvents.length; i++) {
+            var ev = allEvents[i]
+            if (ev.endMs <= startMs || ev.startMs >= endMs)
+                continue
+            out.push(ev)
+        }
+        out.sort(function(a, b) {
+            if (a.startMs !== b.startMs)
+                return a.startMs - b.startMs
+            return a.endMs - b.endMs
+        })
+        return out
+    }
+
+    function allDayEventsForDay(dayDate) {
+        var dayEvents = root.eventsForDay(dayDate)
+        var out = []
+        for (var i = 0; i < dayEvents.length; i++) {
+            if (root.isAllDayEvent(dayEvents[i]))
+                out.push(dayEvents[i])
+        }
+        return out
+    }
+
+    function timedEventsForDay(dayDate) {
+        var dayEvents = root.eventsForDay(dayDate)
+        var out = []
+        for (var i = 0; i < dayEvents.length; i++) {
+            if (!root.isAllDayEvent(dayEvents[i]))
+                out.push(dayEvents[i])
+        }
+        return out
+    }
+
+    function monthChipText(eventObj) {
+        if (root.isAllDayEvent(eventObj))
+            return eventObj.title
+        return root.formatEventTime(new Date(eventObj.startMs)) + " " + eventObj.title
+    }
+
+    function timelineLayoutForDay(dayDate, timedEvents) {
+        var dayStart = root.dayStartMs(dayDate)
+        var dayEnd = dayStart + (24 * 60 * 60 * 1000)
+        var sorted = timedEvents.slice(0)
+        sorted.sort(function(a, b) {
+            if (a.startMs !== b.startMs)
+                return a.startMs - b.startMs
+            return a.endMs - b.endMs
+        })
+
+        var active = []
+        var out = []
+
+        for (var i = 0; i < sorted.length; i++) {
+            var ev = sorted[i]
+            var startMs = Math.max(ev.startMs, dayStart)
+            var endMs = Math.min(ev.endMs, dayEnd)
+            if (endMs <= startMs)
+                endMs = startMs + 60000
+
+            var stillActive = []
+            for (var j = 0; j < active.length; j++) {
+                if (active[j].endMs > startMs)
+                    stillActive.push(active[j])
+            }
+            active = stillActive
+
+            var used = {}
+            for (j = 0; j < active.length; j++)
+                used[active[j].slot] = true
+
+            var slot = 0
+            while (used[slot])
+                slot++
+
+            active.push({ endMs: endMs, slot: slot })
+
+            out.push({
+                event: ev,
+                startMs: startMs,
+                endMs: endMs,
+                slot: slot,
+                columns: Math.max(1, active.length)
+            })
+        }
+
+        for (i = 0; i < out.length; i++) {
+            var cols = 1
+            for (j = 0; j < out.length; j++) {
+                var a = out[i]
+                var b = out[j]
+                var overlaps = !(a.endMs <= b.startMs || b.endMs <= a.startMs)
+                if (overlaps)
+                    cols = Math.max(cols, b.slot + 1)
+            }
+            out[i].columns = Math.max(out[i].columns, cols)
+        }
+
+        return out
+    }
+
+    function scrollDayTimelineToNow() {
+        if (typeof dayTimelineFlick === "undefined" || typeof dayViewPanel === "undefined") {
+            return
+        }
+        if (root.currentView !== 0 || root.setupOpen) {
             return
         }
 
@@ -1119,7 +1073,10 @@ Window {
 
                                                             Text {
                                                                 text: (root.isTentativeEvent(modelData.event) ? "! " : "") + modelData.event.title
-                                                                color: root.eventTitleColor(modelData.event.color)
+                                                                color: root.eventTitleColor(
+                                                                    modelData.event.color,
+                                                                    root.isTentativeEvent(modelData.event) ? 0.45 : 0.78,
+                                                                    "#0d1e2e")
                                                                 font.pixelSize: root.timelineEventTitleTextSize
                                                                 font.bold: true
                                                                 elide: Text.ElideRight
@@ -1129,7 +1086,10 @@ Window {
                                                             Text {
                                                                 text: root.formatEventTime(new Date(modelData.event.startMs)) + " - " +
                                                                       root.formatEventTime(new Date(modelData.event.endMs))
-                                                                color: root.eventMetaColor(modelData.event.color)
+                                                                color: root.eventMetaColor(
+                                                                    modelData.event.color,
+                                                                    root.isTentativeEvent(modelData.event) ? 0.45 : 0.78,
+                                                                    "#0d1e2e")
                                                                 font.pixelSize: root.timelineEventMetaTextSize
                                                             }
                                                         }
@@ -1374,7 +1334,10 @@ Window {
                                                             spacing: 1
                                                             Text {
                                                                 text: (root.isTentativeEvent(modelData.event) ? "! " : "") + modelData.event.title
-                                                                color: root.eventTitleColor(modelData.event.color)
+                                                                color: root.eventTitleColor(
+                                                                    modelData.event.color,
+                                                                    root.isTentativeEvent(modelData.event) ? 0.45 : 0.78,
+                                                                    root.ncPanelAlt)
                                                                 font.pixelSize: root.timelineEventTitleTextSize
                                                                 font.bold: true
                                                                 elide: Text.ElideRight
@@ -1382,7 +1345,10 @@ Window {
                                                             }
                                                             Text {
                                                                 text: root.formatEventTime(new Date(modelData.event.startMs))
-                                                                color: root.eventMetaColor(modelData.event.color)
+                                                                color: root.eventMetaColor(
+                                                                    modelData.event.color,
+                                                                    root.isTentativeEvent(modelData.event) ? 0.45 : 0.78,
+                                                                    root.ncPanelAlt)
                                                                 font.pixelSize: root.timelineEventMetaTextSize
                                                             }
                                                         }
@@ -2069,7 +2035,9 @@ Window {
                                             }
                                         }
                                         Button {
-                                            text: "✕"; implicitWidth: 36
+                                            text: "Delete"
+                                            icon.name: "edit-delete"
+                                            implicitWidth: 86
                                             onClicked: feedListModel.remove(index)
                                         }
                                     }

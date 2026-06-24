@@ -284,7 +284,8 @@ QString WeatherManager::fmtTemp(double celsius) const {
 }
 
 QString WeatherManager::fmtWind(double kmh) const {
-    // Always show km/h for now; could add mph toggle alongside temperature unit
+    if (m_temperatureUnit == Fahrenheit)
+        return QString::number(qRound(kmh * 0.621371)) + QStringLiteral(" mph");
     return QString::number(qRound(kmh)) + QStringLiteral(" km/h");
 }
 

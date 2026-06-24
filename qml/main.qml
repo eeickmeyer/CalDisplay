@@ -92,6 +92,49 @@ Window {
         allEvents = eventModel.getEvents()
     }
 
+    function hexToRgb(colorString) {
+        var hex = (colorString || "").toString().trim()
+        if (hex.charAt(0) === "#")
+            hex = hex.slice(1)
+
+        if (hex.length === 3) {
+            return {
+                r: parseInt(hex.charAt(0) + hex.charAt(0), 16),
+                g: parseInt(hex.charAt(1) + hex.charAt(1), 16),
+                b: parseInt(hex.charAt(2) + hex.charAt(2), 16)
+            }
+        }
+
+        if (hex.length === 6 || hex.length === 8) {
+            var offset = hex.length === 8 ? 2 : 0 // Ignore alpha when present
+            return {
+                r: parseInt(hex.substr(offset, 2), 16),
+                g: parseInt(hex.substr(offset + 2, 2), 16),
+                b: parseInt(hex.substr(offset + 4, 2), 16)
+            }
+        }
+
+        return null
+    }
+
+    function isLightColor(colorString) {
+        var rgb = root.hexToRgb(colorString)
+        if (!rgb)
+            return false
+
+        // Perceived brightness for contrast decisions
+        var brightness = (0.299 * rgb.r) + (0.587 * rgb.g) + (0.114 * rgb.b)
+        return brightness >= 168
+    }
+
+    function eventTitleColor(eventColor) {
+        return root.isLightColor(eventColor) ? "#111111" : root.ncText
+    }
+
+    function eventMetaColor(eventColor) {
+        return root.isLightColor(eventColor) ? "#111111" : root.ncMutedText
+    }
+
     function parseVisibleViews(raw) {
         var allowed = ["day", "week", "month", "twomonths", "weather"]
         var keys = []
@@ -1004,7 +1047,7 @@ Window {
 
                                                             Text {
                                                                 text: (root.isTentativeEvent(modelData.event) ? "! " : "") + modelData.event.title
-                                                                color: root.ncText
+                                                                color: root.eventTitleColor(modelData.event.color)
                                                                 font.pixelSize: root.timelineEventTitleTextSize
                                                                 font.bold: true
                                                                 elide: Text.ElideRight
@@ -1014,7 +1057,7 @@ Window {
                                                             Text {
                                                                 text: root.formatEventTime(new Date(modelData.event.startMs)) + " - " +
                                                                       root.formatEventTime(new Date(modelData.event.endMs))
-                                                                color: root.ncMutedText
+                                                                color: root.eventMetaColor(modelData.event.color)
                                                                 font.pixelSize: root.timelineEventMetaTextSize
                                                             }
                                                         }
@@ -1259,7 +1302,7 @@ Window {
                                                             spacing: 1
                                                             Text {
                                                                 text: (root.isTentativeEvent(modelData.event) ? "! " : "") + modelData.event.title
-                                                                color: root.ncText
+                                                                color: root.eventTitleColor(modelData.event.color)
                                                                 font.pixelSize: root.timelineEventTitleTextSize
                                                                 font.bold: true
                                                                 elide: Text.ElideRight
@@ -1267,7 +1310,7 @@ Window {
                                                             }
                                                             Text {
                                                                 text: root.formatEventTime(new Date(modelData.event.startMs))
-                                                                color: root.ncMutedText
+                                                                color: root.eventMetaColor(modelData.event.color)
                                                                 font.pixelSize: root.timelineEventMetaTextSize
                                                             }
                                                         }
@@ -1602,6 +1645,7 @@ Window {
 
                 // ── Right column: extended daily forecast ─────────────────
                 Rectangle {
+                    id: dailyForecastPanel
                     Layout.fillWidth: true; Layout.fillHeight: true
                     Layout.minimumWidth: 320
                     color: root.ncPanelAlt; radius: 12
@@ -1713,7 +1757,7 @@ Window {
                             delegate: Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                Layout.preferredHeight: parent.parent.parent.itemHeight
+                                Layout.preferredHeight: dailyForecastPanel.itemHeight
                                 color: "transparent"
                                 border.width: 0
                                 RowLayout {
@@ -1723,7 +1767,7 @@ Window {
                                     Text {
                                         text: modelData.dayName
                                         color: index === 0 ? root.ncText : root.ncMutedText
-                                        font.pixelSize: parent.parent.parent.parent.baseFontSize
+                                        font.pixelSize: dailyForecastPanel.baseFontSize
                                         font.bold: index === 0
                                         Layout.preferredWidth: 110
                                         Layout.minimumWidth: 110
@@ -1731,23 +1775,23 @@ Window {
                                     }
                                     Image {
                                         source: modelData.iconPath || ""
-                                        sourceSize.width: parent.parent.parent.parent.iconSize
-                                        sourceSize.height: parent.parent.parent.parent.iconSize
+                                        sourceSize.width: dailyForecastPanel.iconSize
+                                        sourceSize.height: dailyForecastPanel.iconSize
                                         fillMode: Image.PreserveAspectFit
-                                        Layout.preferredWidth: parent.parent.parent.parent.iconSize
-                                        Layout.preferredHeight: parent.parent.parent.parent.iconSize
-                                        Layout.minimumWidth: parent.parent.parent.parent.iconSize
+                                        Layout.preferredWidth: dailyForecastPanel.iconSize
+                                        Layout.preferredHeight: dailyForecastPanel.iconSize
+                                        Layout.minimumWidth: dailyForecastPanel.iconSize
                                     }
                                     Text {
                                         text: modelData.description
                                         color: root.ncSubtleText
-                                        font.pixelSize: parent.parent.parent.parent.baseFontSize * 0.9
+                                        font.pixelSize: dailyForecastPanel.baseFontSize * 0.9
                                         Layout.fillWidth: true; elide: Text.ElideRight
                                     }
                                     Text {
                                         text: modelData.tempMaxStr
                                         color: root.ncText
-                                        font.pixelSize: parent.parent.parent.parent.baseFontSize
+                                        font.pixelSize: dailyForecastPanel.baseFontSize
                                         font.bold: true
                                         Layout.preferredWidth: 64
                                         Layout.minimumWidth: 64
@@ -1756,7 +1800,7 @@ Window {
                                     Text {
                                         text: modelData.tempMinStr
                                         color: root.ncSubtleText
-                                        font.pixelSize: parent.parent.parent.parent.baseFontSize
+                                        font.pixelSize: dailyForecastPanel.baseFontSize
                                         Layout.preferredWidth: 64
                                         Layout.minimumWidth: 64
                                         horizontalAlignment: Text.AlignRight
@@ -1764,7 +1808,7 @@ Window {
                                     Text {
                                         text: modelData.precipProb > 0 && modelData.precipType ? modelData.precipType : ""
                                         color: modelData.precipProb > 30 ? root.ncAccent : root.ncSubtleText
-                                        font.pixelSize: parent.parent.parent.parent.baseFontSize * 0.85
+                                        font.pixelSize: dailyForecastPanel.baseFontSize * 0.85
                                         Layout.preferredWidth: 60
                                         Layout.minimumWidth: 60
                                         horizontalAlignment: Text.AlignRight
@@ -2134,9 +2178,9 @@ Window {
 
             RowLayout {
                 Layout.fillWidth: true; spacing: 10
-                Label { text: "Temperature"; color: root.ncText }
+                Label { text: "Weather units"; color: root.ncText }
                 ComboBox {
-                    model: ["Celsius (\u00B0C)", "Fahrenheit (\u00B0F)"]
+                    model: ["Metric (\u00B0C, km/h)", "Imperial (\u00B0F, mph)"]
                     currentIndex: weatherManager.temperatureUnit
                     onActivated: { weatherManager.temperatureUnit = currentIndex; weatherManager.saveSettings() }
                 }

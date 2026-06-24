@@ -1218,11 +1218,21 @@ void WeatherManager::parseNOAAAlerts(const QByteArray& data) {
             if (expires.isValid() && expires < now) continue;
         }
         QVariantMap alert;
+        const QString severity = js(props, QStringLiteral("severity"));
+        QString iconPath = iconPathForName(
+            severity.compare(QStringLiteral("Extreme"), Qt::CaseInsensitive) == 0
+                ? QStringLiteral("dialog-error")
+                : QStringLiteral("dialog-warning"),
+            24);
+        if (iconPath.isEmpty())
+            iconPath = iconPathForName(QStringLiteral("weather-storm"), 24);
+
         alert[QStringLiteral("event")]       = js(props, QStringLiteral("event"));
         alert[QStringLiteral("headline")]    = js(props, QStringLiteral("headline"));
         alert[QStringLiteral("description")] = js(props, QStringLiteral("description"));
-        alert[QStringLiteral("severity")]    = js(props, QStringLiteral("severity"));
+        alert[QStringLiteral("severity")]    = severity;
         alert[QStringLiteral("expires")]     = expiresStr;
+        alert[QStringLiteral("iconPath")]    = iconPath;
         m_weatherAlerts.append(alert);
     }
 }

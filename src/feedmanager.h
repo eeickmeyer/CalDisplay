@@ -27,6 +27,7 @@ class FeedManager : public QObject {
     Q_PROPERTY(int timeFormatPreference READ timeFormatPreference WRITE setTimeFormatPreference NOTIFY timeFormatPreferenceChanged)
     Q_PROPERTY(bool sundayFirst READ sundayFirst WRITE setSundayFirst NOTIFY sundayFirstChanged)
     Q_PROPERTY(QString displayName READ displayName WRITE setDisplayName NOTIFY displayNameChanged)
+    Q_PROPERTY(QString visibleViews READ visibleViews WRITE setVisibleViews NOTIFY visibleViewsChanged)
 
 public:
     explicit FeedManager(EventModel* eventModel, QObject* parent = nullptr);
@@ -40,6 +41,7 @@ public:
     int timeFormatPreference() const;
     bool sundayFirst() const;
     QString displayName() const;
+    QString visibleViews() const;
 
     void setFeedUrls(const QString& value);
     void setAutoRefreshEnabled(bool value);
@@ -47,6 +49,7 @@ public:
     void setTimeFormatPreference(int value);
     void setSundayFirst(bool value);
     void setDisplayName(const QString& value);
+    void setVisibleViews(const QString& value);
 
     Q_INVOKABLE void saveSettings();
     Q_INVOKABLE void refreshFeeds();
@@ -63,6 +66,7 @@ signals:
     void timeFormatPreferenceChanged();
     void sundayFirstChanged();
     void displayNameChanged();
+    void visibleViewsChanged();
 
 private:
     QString m_feedUrls;
@@ -74,6 +78,7 @@ private:
     int m_timeFormatPreference = 0;
     bool m_sundayFirst = false;
     QString m_displayName = QStringLiteral("Family Calendar");
+    QString m_visibleViews = QStringLiteral("day,week,month,twomonths,weather");
     QTimer m_autoRefreshTimer;
 
     EventModel* m_eventModel;
@@ -87,6 +92,5 @@ private:
 
     QStringList normalizedEntryList() const;
     QStringList normalizedUrlList() const;
-    QString colorForSource(const QString& source) const;
     QString sourceNameFromUrl(const QString& url) const;
 };

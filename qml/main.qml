@@ -58,11 +58,27 @@ Window {
     readonly property string clockTimePattern: use12HourClock ? "h:mm:ss AP" : "HH:mm:ss"
 
     // ── View cycling ──────────────────────────────────────────────
-    property int  currentView:   0      // 0 = Day, 1 = Week, 2 = Month, 3 = Two Months, 4 = Weather
+    property int  currentView:   0      // stack index: 0=Day, 1=Week, 2=Month, 3=Two Months, 4=Weather
     property int  viewCycleSecs: 20
     property real cycleProgress: 0.0
     property var  allEvents:     []
-    readonly property var viewNames: ["Day", "Week", "Month", "Two Months", "Weather"]
+    readonly property var allViewDefs: [
+        { key: "day", label: "Day", index: 0 },
+        { key: "week", label: "Week", index: 1 },
+        { key: "month", label: "Month", index: 2 },
+        { key: "twomonths", label: "Two Months", index: 3 },
+        { key: "weather", label: "Weather", index: 4 }
+    ]
+    readonly property var visibleViewKeys: root.parseVisibleViews(feedManager.visibleViews)
+    readonly property var activeViews: {
+        var filtered = []
+        for (var i = 0; i < root.visibleViewKeys.length; i++) {
+            var def = root.viewDefForKey(root.visibleViewKeys[i])
+            if (def)
+                filtered.push(def)
+        }
+        return filtered
+    }
     readonly property var calendarLegend: {
         var seen = {}; var result = []
         for (var i = 0; i < allEvents.length; i++) {
@@ -74,6 +90,115 @@ Window {
 
     function refreshEventData() {
         allEvents = eventModel.getEvents()
+    }
+
+    function parseVisibleViews(raw) {
+        var allowed = ["day", "week", "month", "twomonths", "weather"]
+        var keys = []
+        var input = (raw || "").split(",")
+        for (var i = 0; i < input.length; i++) {
+            var k = input[i].trim().toLowerCase()
+            if (!k || allowed.indexOf(k) === -1 || keys.indexOf(k) !== -1)
+                continue
+            keys.push(k)
+        }
+        if (keys.length === 0)
+            keys.push("day")
+        return keys
+    }
+
+    function serializeVisibleViews(keys) {
+        return keys.join(",")
+    }
+
+    function viewDefForKey(key) {
+        for (var i = 0; i < root.allViewDefs.length; i++) {
+            if (root.allViewDefs[i].key === key)
+                return root.allViewDefs[i]
+        }
+        return null
+    }
+
+    function viewLabelForKey(key) {
+        var def = root.viewDefForKey(key)
+        return def ? def.label : key
+    }
+
+    function isViewEnabled(key) {
+        return root.visibleViewKeys.indexOf(key) !== -1
+    }
+
+    function firstEnabledViewIndex() {
+        return root.activeViews.length > 0 ? root.activeViews[0].index : 0
+    }
+
+    function ensureCurrentViewEnabled() {
+        var enabled = false
+        for (var i = 0; i < root.activeViews.length; i++) {
+            if (root.activeViews[i].index === root.currentView) {
+                enabled = true
+                break
+            }
+        }
+        if (!enabled)
+            root.currentView = root.firstEnabledViewIndex()
+    }
+
+    function nextEnabledViewIndex(fromIndex) {
+        if (root.activeViews.length === 0)
+            return 0
+
+        var currentPos = -1
+        for (var i = 0; i < root.activeViews.length; i++) {
+            if (root.activeViews[i].index === fromIndex) {
+                currentPos = i
+                break
+            }
+        }
+
+        if (currentPos === -1)
+            return root.activeViews[0].index
+
+        return root.activeViews[(currentPos + 1) % root.activeViews.length].index
+    }
+
+    function setViewEnabled(key, enabled) {
+        var keys = root.visibleViewKeys.slice(0)
+        var idx = keys.indexOf(key)
+
+        if (enabled) {
+            if (idx === -1)
+                keys.push(key)
+        } else {
+            if (idx === -1 || keys.length <= 1)
+                return
+            keys.splice(idx, 1)
+        }
+
+        feedManager.visibleViews = root.serializeVisibleViews(keys)
+        feedManager.saveSettings()
+        root.ensureCurrentViewEnabled()
+        viewCycleTimer.restart()
+        root.startCycle()
+    }
+
+    function moveVisibleView(fromIndex, toIndex) {
+        var keys = root.visibleViewKeys.slice(0)
+        if (fromIndex < 0 || fromIndex >= keys.length)
+            return
+        if (toIndex < 0 || toIndex >= keys.length)
+            return
+        if (fromIndex === toIndex)
+            return
+
+        var moved = keys.splice(fromIndex, 1)[0]
+        keys.splice(toIndex, 0, moved)
+
+        feedManager.visibleViews = root.serializeVisibleViews(keys)
+        feedManager.saveSettings()
+        root.ensureCurrentViewEnabled()
+        viewCycleTimer.restart()
+        root.startCycle()
     }
 
     function startCycle() {
@@ -339,6 +464,7 @@ Window {
     Component.onCompleted: {
         root.lastClockTickMs = (new Date()).getTime()
         refreshEventData()
+        root.ensureCurrentViewEnabled()
         if (!windowedMode) startCycle()
     }
 
@@ -391,6 +517,7 @@ Window {
     }
 
     onSetupOpenChanged: { if (setupOpen) populateFeedList(); else { viewCycleTimer.restart(); startCycle() } }
+    onVisibleViewKeysChanged: root.ensureCurrentViewEnabled()
     onCurrentViewChanged: {
         if (currentView === 0) {
             Qt.callLater(scrollDayTimelineToNow)
@@ -457,10 +584,9 @@ Window {
     Timer {
         id: viewCycleTimer
         interval: root.viewCycleSecs * 1000
-        running: !root.setupOpen; repeat: true
+        running: !root.setupOpen && root.activeViews.length > 1; repeat: true
         onTriggered: {
-            var next = (root.currentView + 1) % root.viewNames.length
-            if (next === 4 && !weatherManager.configured) next = 0
+            var next = root.nextEnabledViewIndex(root.currentView)
             root.currentView = next
             root.startCycle()
         }
@@ -534,20 +660,20 @@ Window {
                 Layout.fillWidth: true
                 spacing: 6
                 Repeater {
-                    model: root.viewNames
+                    model: root.activeViews
                     delegate: Rectangle {
                         height: 34; implicitWidth: tabLabel.implicitWidth + 28; radius: 6
-                        color: root.currentView === index ? root.ncPrimaryStrong : root.ncPanelAlt
-                        border.width: root.currentView === index ? 1 : 0
+                        color: root.currentView === modelData.index ? root.ncPrimaryStrong : root.ncPanelAlt
+                        border.width: root.currentView === modelData.index ? 1 : 0
                         border.color: root.ncAccent
                         Text {
-                            id: tabLabel; anchors.centerIn: parent; text: modelData
-                            color: root.currentView === index ? root.ncText : root.ncSubtleText
-                            font.pixelSize: 17; font.bold: root.currentView === index
+                            id: tabLabel; anchors.centerIn: parent; text: modelData.label
+                            color: root.currentView === modelData.index ? root.ncText : root.ncSubtleText
+                            font.pixelSize: 17; font.bold: root.currentView === modelData.index
                         }
                         MouseArea {
                             anchors.fill: parent
-                            onClicked: { root.currentView = index; viewCycleTimer.restart(); root.startCycle() }
+                            onClicked: { root.currentView = modelData.index; viewCycleTimer.restart(); root.startCycle() }
                         }
                     }
                 }
@@ -555,7 +681,10 @@ Window {
             }
 
             Rectangle {
-                Layout.fillWidth: true; height: 3; color: root.ncPanelAlt; radius: 1
+                Layout.fillWidth: true
+                Layout.preferredHeight: root.activeViews.length > 1 ? 3 : 0
+                visible: root.activeViews.length > 1
+                height: 3; color: root.ncPanelAlt; radius: 1
                 Rectangle {
                     width: parent.width * root.cycleProgress; height: parent.height
                     radius: 1; color: root.ncAccent; opacity: 0.8
@@ -1512,11 +1641,28 @@ Window {
                                         model: weatherManager.weatherAlerts
                                         delegate: RowLayout {
                                             spacing: 8
-                                            
-                                            Text {
-                                                text: "\u26A0"
-                                                font.pixelSize: 24
-                                                color: "#ffffff"
+
+                                            Item {
+                                                Layout.preferredWidth: 24
+                                                Layout.preferredHeight: 24
+
+                                                Image {
+                                                    anchors.fill: parent
+                                                    source: modelData.iconPath || ""
+                                                    sourceSize.width: 24
+                                                    sourceSize.height: 24
+                                                    fillMode: Image.PreserveAspectFit
+                                                    visible: !!source
+                                                }
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "!"
+                                                    font.pixelSize: 20
+                                                    font.bold: true
+                                                    color: "#ffffff"
+                                                    visible: !(modelData.iconPath && modelData.iconPath.length > 0)
+                                                }
                                             }
                                             
                                             Text {
@@ -1853,6 +1999,76 @@ Window {
                 }
                 Label { text: "sec"; color: root.ncText }
                 Item { Layout.fillWidth: true }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 6
+
+                Label { text: "Visible tabs"; color: root.ncText }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Repeater {
+                        model: root.allViewDefs
+                        delegate: CheckBox {
+                            text: modelData.label
+                            checked: root.isViewEnabled(modelData.key)
+                            onToggled: root.setViewEnabled(modelData.key, checked)
+                        }
+                    }
+                }
+                Label {
+                    text: "At least one tab must remain enabled."
+                    color: root.ncSubtleText
+                    font.pixelSize: 12
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 6
+
+                Label { text: "Tab order"; color: root.ncText }
+                Label {
+                    text: "This order controls both tab display and auto-cycle order."
+                    color: root.ncSubtleText
+                    font.pixelSize: 12
+                }
+
+                Repeater {
+                    model: root.visibleViewKeys
+                    delegate: RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Rectangle {
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: root.ncAccent
+                        }
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: root.viewLabelForKey(modelData)
+                            color: root.ncMutedText
+                        }
+
+                        Button {
+                            text: "Up"
+                            enabled: index > 0
+                            onClicked: root.moveVisibleView(index, index - 1)
+                        }
+
+                        Button {
+                            text: "Down"
+                            enabled: index < (root.visibleViewKeys.length - 1)
+                            onClicked: root.moveVisibleView(index, index + 1)
+                        }
+                    }
+                }
             }
 
             Rectangle {

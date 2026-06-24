@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <QCoreApplication>
+#include <QColor>
 #include <QDate>
 #include <QDir>
 #include <QFile>
@@ -478,6 +479,76 @@ QString localFeedPathFromInput(QString input) {
 
     return {};
 }
+
+QString sourceKeyFor(const QString& source) {
+    return source.trimmed().toCaseFolded();
+}
+
+QString normalizeVisibleViews(const QString& raw) {
+    static const QStringList allowed = {
+        QStringLiteral("day"),
+        QStringLiteral("week"),
+        QStringLiteral("month"),
+        QStringLiteral("twomonths"),
+        QStringLiteral("weather")
+    };
+
+    QStringList out;
+    for (const QString& token : raw.split(',', Qt::SkipEmptyParts)) {
+        const QString key = token.trimmed().toLower();
+        if (!allowed.contains(key) || out.contains(key))
+            continue;
+        out.append(key);
+    }
+
+    if (out.isEmpty())
+        out.append(QStringLiteral("day"));
+
+    return out.join(',');
+}
+
+QHash<QString, QString> buildSourceColorMap(const QStringList& sources) {
+    static const QStringList basePalette = {
+        QStringLiteral("#0082c9"),
+        QStringLiteral("#2daee0"),
+        QStringLiteral("#4cb9c5"),
+        QStringLiteral("#66bb6a"),
+        QStringLiteral("#f4b13d"),
+        QStringLiteral("#f28c38"),
+        QStringLiteral("#e35d6a"),
+        QStringLiteral("#9c6ade")
+    };
+
+    QHash<QString, QString> assigned;
+    QSet<QString> used;
+    int nextIndex = 0;
+
+    for (const QString& source : sources) {
+        const QString key = sourceKeyFor(source);
+        if (key.isEmpty() || assigned.contains(key))
+            continue;
+
+        QString color;
+        if (nextIndex < basePalette.size()) {
+            color = basePalette.at(nextIndex);
+        } else {
+            // Generate additional distinct colors after the base palette is exhausted.
+            int attempt = 0;
+            do {
+                const int hue = (nextIndex * 137 + attempt * 37) % 360;
+                const QColor generated = QColor::fromHsv(hue, 165, 224);
+                color = generated.name(QColor::HexRgb);
+                ++attempt;
+            } while (used.contains(color) && attempt < 360);
+        }
+
+        assigned.insert(key, color);
+        used.insert(color);
+        ++nextIndex;
+    }
+
+    return assigned;
+}
 }
 
 FeedManager::FeedManager(EventModel* eventModel, QObject* parent)
@@ -497,6 +568,7 @@ int FeedManager::refreshIntervalMinutes() const { return m_refreshIntervalMinute
 int FeedManager::timeFormatPreference() const { return m_timeFormatPreference; }
 bool FeedManager::sundayFirst() const { return m_sundayFirst; }
 QString FeedManager::displayName() const { return m_displayName; }
+QString FeedManager::visibleViews() const { return m_visibleViews; }
 
 QString FeedManager::lastSync() const {
     if (!m_lastSync.isValid()) {
@@ -558,6 +630,15 @@ void FeedManager::setDisplayName(const QString& value) {
     emit displayNameChanged();
 }
 
+void FeedManager::setVisibleViews(const QString& value) {
+    const QString normalized = normalizeVisibleViews(value);
+    if (m_visibleViews == normalized) {
+        return;
+    }
+    m_visibleViews = normalized;
+    emit visibleViewsChanged();
+}
+
 void FeedManager::saveSettings() {
     const QString filePath = settingsFilePath();
     QDir().mkpath(QFileInfo(filePath).absolutePath());
@@ -568,6 +649,7 @@ void FeedManager::saveSettings() {
     settings.setValue("readonly/timeFormatPreference", m_timeFormatPreference);
     settings.setValue("readonly/sundayFirst", m_sundayFirst);
     settings.setValue("readonly/displayName", m_displayName);
+    settings.setValue("readonly/visibleViews", m_visibleViews);
     settings.sync();
     setStatusMessage(QStringLiteral("Settings saved."));
 }
@@ -623,6 +705,32 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
     auto unauthorizedFeeds = QSharedPointer<int>::create(0);
     auto nonCalendarFeeds = QSharedPointer<int>::create(0);
     auto networkErrorFeeds = QSharedPointer<int>::create(0);
+
+    QStringList sourceOrder;
+    sourceOrder.reserve(entries.size());
+    for (const QString& rawEntry : entries) {
+        const int entryPipe = rawEntry.indexOf('|');
+        const QString customName = entryPipe > 0 ? rawEntry.left(entryPipe).trimmed() : QString();
+        QString urlText = entryPipe > 0 ? rawEntry.mid(entryPipe + 1).trimmed() : rawEntry.trimmed();
+        if (urlText.startsWith(QStringLiteral("webcal://"), Qt::CaseInsensitive)) {
+            urlText.replace(0, 9, QStringLiteral("https://"));
+        }
+
+        static const QRegularExpression ncShareRe(
+            QStringLiteral(R"(^(https?://[^/]+)/index\.php/apps/calendar/p/([^/?#]+))"),
+            QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpressionMatch ncMatch = ncShareRe.match(urlText);
+        if (ncMatch.hasMatch()) {
+            urlText = ncMatch.captured(1)
+                      + QStringLiteral("/remote.php/dav/public-calendars/")
+                      + ncMatch.captured(2)
+                      + QStringLiteral("?export");
+        }
+
+        const QString source = customName.isEmpty() ? sourceNameFromUrl(urlText) : customName;
+        sourceOrder.append(source);
+    }
+    const QHash<QString, QString> sourceColors = buildSourceColorMap(sourceOrder);
 
     auto finalize = [this,
                      pending,
@@ -705,7 +813,7 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         }
 
         const QString source = customName.isEmpty() ? sourceNameFromUrl(urlText) : customName;
-        const QString color = colorForSource(source);
+        const QString color = sourceColors.value(sourceKeyFor(source), QStringLiteral("#0082c9"));
 
         const QString localPath = localFeedPathFromInput(urlText);
         if (!localPath.isEmpty()) {
@@ -781,6 +889,8 @@ void FeedManager::loadSettings() {
     m_timeFormatPreference = std::clamp(settings.value("readonly/timeFormatPreference", 0).toInt(), 0, 2);
     m_sundayFirst = settings.value("readonly/sundayFirst", false).toBool();
     m_displayName = settings.value("readonly/displayName", QStringLiteral("Family Calendar")).toString().trimmed();
+    m_visibleViews = normalizeVisibleViews(
+        settings.value("readonly/visibleViews", QStringLiteral("day,week,month,twomonths,weather")).toString());
     if (m_displayName.isEmpty()) {
         m_displayName = QStringLiteral("Family Calendar");
     }
@@ -791,6 +901,7 @@ void FeedManager::loadSettings() {
     emit timeFormatPreferenceChanged();
     emit sundayFirstChanged();
     emit displayNameChanged();
+    emit visibleViewsChanged();
 
     setStatusMessage("Add shared ICS links.");
     updateAutoRefreshTimer();
@@ -862,15 +973,6 @@ QStringList FeedManager::normalizedUrlList() const {
     }
     result.removeDuplicates();
     return result;
-}
-
-QString FeedManager::colorForSource(const QString& source) const {
-    static const QStringList palette = {
-        "#0082c9", "#2daee0", "#4cb9c5", "#66bb6a",
-        "#f4b13d", "#f28c38", "#e35d6a", "#9c6ade"
-    };
-    const uint hash = qHash(source.toLower());
-    return palette.at(static_cast<int>(hash % palette.size()));
 }
 
 QString FeedManager::sourceNameFromUrl(const QString& url) const {

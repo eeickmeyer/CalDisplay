@@ -1607,7 +1607,7 @@ Window {
                     color: root.ncPanelAlt; radius: 12
                     border.width: 1; border.color: root.ncBorder; clip: true
 
-                    property real availableHeight: height - 60
+                    property real availableHeight: Math.max(100, height - 60)
                     property int forecastCount: weatherManager.dailyForecast.length
                     property real itemHeight: forecastCount > 0 ? Math.max(28, availableHeight / forecastCount) : 40
                     property real baseFontSize: Math.max(16, Math.min(22, itemHeight * 0.5))

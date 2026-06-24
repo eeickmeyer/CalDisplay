@@ -2,15 +2,22 @@
 
 [![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/caldisplay)
 
-CalDisplay is a Qt/QML calendar, weather, and clock display designed for wall screens and low-power Linux hardware.
+CalDisplay is a versatile Qt/QML calendar, weather, and clock display system designed for wall-mounted screens, kiosks, and low-power Linux hardware. It's ideal for homes, offices, schools, corporate environments, conference rooms, reception areas, and public venues.
 
 It runs in two modes:
-- Windowed mode for setup and configuration
-- Full-screen kiosk mode for display
+- **Windowed mode** for setup, configuration, and testing
+- **Full-screen kiosk mode** for dedicated display installations
 
-Both modes support calendar views and the Weather tab.
+Both modes support multiple calendar views and the Weather tab with full customization of which views to display and in what order.
 
-This was created to be a family calendar display, but other use cases could be as a coprporate or collegiate event calendar display, conference room use calendar display, etc.
+**Use Cases:**
+- Family calendar dashboards in shared spaces
+- Corporate event calendars for meeting rooms and reception areas
+- School/university class schedules and event displays
+- Conference room availability and booking displays
+- Library or community center event calendars
+- Venue/attraction event schedules
+- Team availability and project milestone tracking
 
 ## Features
 

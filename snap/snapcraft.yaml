@@ -1,6 +1,6 @@
 name: caldisplay
 base: core24
-version: '1.2.0'
+version: '1.2.1'
 icon: assets/caldisplay.svg
 summary: Family calendar and clock display
 title: CalDisplay

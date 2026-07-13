@@ -358,57 +358,114 @@ void appendIcsEvents(const QByteArray& body,
     const QString unfolded = unfoldIcs(body);
     const QStringList lines = unfolded.split('\n', Qt::KeepEmptyParts);
 
+    struct ParsedEvent {
+        QString summary;
+        QString uid;
+        QString status;
+        QDateTime start;
+        QDateTime end;
+        QString rrule;
+        QSet<QDate> exDates;
+        bool hasRecurrenceId = false;
+        QDate recurrenceDate;
+        int sequence = 0;
+        QDateTime lastModified;
+    };
+
+    auto shouldReplace = [](const ParsedEvent& current, const ParsedEvent& candidate) {
+        if (candidate.sequence != current.sequence)
+            return candidate.sequence > current.sequence;
+        if (candidate.lastModified.isValid() != current.lastModified.isValid())
+            return candidate.lastModified.isValid();
+        if (candidate.lastModified.isValid() && current.lastModified.isValid())
+            return candidate.lastModified > current.lastModified;
+        // Fallback: later entry wins.
+        return true;
+    };
+
+    auto appendParsedEvent = [&](const ParsedEvent& pe) {
+        CalendarEvent ev;
+        ev.title = pe.summary.isEmpty() ? QStringLiteral("(No title)") : pe.summary;
+        ev.calendar = source;
+        ev.color = color;
+        ev.start = pe.start;
+        ev.end = pe.end;
+        ev.status = pe.status;
+        mergedEvents->append(ev);
+    };
+
+    QList<ParsedEvent> parsedEvents;
+
     bool inEvent = false;
     QString summary;
+    QString uid;
     QString dtStartRaw;
     QString dtEndRaw;
     QString dtStartTzid;
     QString dtEndTzid;
+    QString recurrenceIdRaw;
+    QString recurrenceIdTzid;
     QString rruleRaw;
+    QString lastModifiedRaw;
     QList<QPair<QString, QString>> exDateValues;
     QString status = QStringLiteral("CONFIRMED");
+    int sequence = 0;
 
     for (const QString& originalLine : lines) {
         const QString line = originalLine.trimmed();
         if (line == "BEGIN:VEVENT") {
             inEvent = true;
             summary.clear();
+            uid.clear();
             dtStartRaw.clear();
             dtEndRaw.clear();
             dtStartTzid.clear();
             dtEndTzid.clear();
+            recurrenceIdRaw.clear();
+            recurrenceIdTzid.clear();
             rruleRaw.clear();
+            lastModifiedRaw.clear();
             exDateValues.clear();
             status = QStringLiteral("CONFIRMED");
+            sequence = 0;
             continue;
         }
 
         if (line == "END:VEVENT") {
             if (inEvent) {
-                CalendarEvent ev;
-                ev.title = summary.isEmpty() ? QStringLiteral("(No title)") : summary;
-                ev.calendar = source;
-                ev.color = color;
-                ev.start = parseIcsDateTimeWithTzid(dtStartRaw, dtStartTzid);
-                ev.end = parseIcsDateTimeWithTzid(dtEndRaw, dtEndTzid);
-                ev.status = status;
-                if (!ev.start.isValid()) {
+                ParsedEvent pe;
+                pe.summary = summary;
+                pe.uid = uid.trimmed();
+                pe.status = status;
+                pe.rrule = rruleRaw;
+                pe.sequence = sequence;
+                pe.start = parseIcsDateTimeWithTzid(dtStartRaw, dtStartTzid);
+                pe.end = parseIcsDateTimeWithTzid(dtEndRaw, dtEndTzid);
+                pe.lastModified = parseIcsDateTimeWithTzid(lastModifiedRaw, QString());
+
+                if (!pe.start.isValid()) {
                     inEvent = false;
                     continue;
                 }
-                if (!ev.end.isValid() || ev.end < ev.start) {
-                    ev.end = ev.start.addSecs(60 * 60);
+                if (!pe.end.isValid() || pe.end < pe.start) {
+                    pe.end = pe.start.addSecs(60 * 60);
                 }
-                if (!rruleRaw.isEmpty()) {
-                    QSet<QDate> exDates;
-                    for (const auto& ex : exDateValues) {
-                        const QDateTime exDt = parseIcsDateTimeWithTzid(ex.first, ex.second);
-                        if (exDt.isValid()) exDates.insert(exDt.date());
+
+                for (const auto& ex : exDateValues) {
+                    const QDateTime exDt = parseIcsDateTimeWithTzid(ex.first, ex.second);
+                    if (exDt.isValid())
+                        pe.exDates.insert(exDt.date());
+                }
+
+                if (!recurrenceIdRaw.isEmpty()) {
+                    const QDateTime rid = parseIcsDateTimeWithTzid(recurrenceIdRaw, recurrenceIdTzid);
+                    if (rid.isValid()) {
+                        pe.hasRecurrenceId = true;
+                        pe.recurrenceDate = rid.date();
                     }
-                    expandRecurrences(ev, rruleRaw, exDates, mergedEvents);
-                } else {
-                    mergedEvents->append(ev);
                 }
+
+                parsedEvents.append(pe);
             }
             inEvent = false;
             continue;
@@ -435,12 +492,17 @@ void appendIcsEvents(const QByteArray& body,
 
         if (key == "SUMMARY") {
             summary = value;
+        } else if (key == "UID") {
+            uid = value;
         } else if (key == "DTSTART") {
             dtStartRaw = value;
             dtStartTzid = tzid;
         } else if (key == "DTEND") {
             dtEndRaw = value;
             dtEndTzid = tzid;
+        } else if (key == "RECURRENCE-ID") {
+            recurrenceIdRaw = value;
+            recurrenceIdTzid = tzid;
         } else if (key == "RRULE") {
             rruleRaw = value;
         } else if (key == "EXDATE") {
@@ -448,10 +510,90 @@ void appendIcsEvents(const QByteArray& body,
             for (const QString& ex : exList) {
                 exDateValues.append({ex.trimmed(), tzid});
             }
+        } else if (key == "SEQUENCE") {
+            sequence = value.toInt();
+        } else if (key == "LAST-MODIFIED") {
+            lastModifiedRaw = value;
         } else if (key == "STATUS") {
             status = value.toUpper();
         }
     }
+
+    QHash<QString, ParsedEvent> recurringMastersByUid;
+    QList<ParsedEvent> recurringMastersNoUid;
+
+    QHash<QString, ParsedEvent> singleEventsByUid;
+    QList<ParsedEvent> singleEventsNoUid;
+
+    QHash<QString, ParsedEvent> overridesByUidAndDate;
+    QList<ParsedEvent> overridesNoUid;
+    QHash<QString, QSet<QDate>> overriddenDatesByUid;
+
+    for (const ParsedEvent& pe : parsedEvents) {
+        if (pe.hasRecurrenceId) {
+            if (pe.uid.isEmpty()) {
+                overridesNoUid.append(pe);
+            } else {
+                overriddenDatesByUid[pe.uid].insert(pe.recurrenceDate);
+                const QString key = pe.uid + QStringLiteral("|") + pe.recurrenceDate.toString(Qt::ISODate);
+                if (!overridesByUidAndDate.contains(key) || shouldReplace(overridesByUidAndDate.value(key), pe)) {
+                    overridesByUidAndDate.insert(key, pe);
+                }
+            }
+            continue;
+        }
+
+        if (!pe.rrule.isEmpty()) {
+            if (pe.uid.isEmpty()) {
+                recurringMastersNoUid.append(pe);
+            } else if (!recurringMastersByUid.contains(pe.uid)
+                       || shouldReplace(recurringMastersByUid.value(pe.uid), pe)) {
+                recurringMastersByUid.insert(pe.uid, pe);
+            }
+            continue;
+        }
+
+        if (pe.uid.isEmpty()) {
+            singleEventsNoUid.append(pe);
+        } else if (!singleEventsByUid.contains(pe.uid)
+                   || shouldReplace(singleEventsByUid.value(pe.uid), pe)) {
+            singleEventsByUid.insert(pe.uid, pe);
+        }
+    }
+
+    for (const ParsedEvent& pe : recurringMastersByUid) {
+        CalendarEvent ev;
+        ev.title = pe.summary.isEmpty() ? QStringLiteral("(No title)") : pe.summary;
+        ev.calendar = source;
+        ev.color = color;
+        ev.start = pe.start;
+        ev.end = pe.end;
+        ev.status = pe.status;
+
+        QSet<QDate> exDates = pe.exDates;
+        exDates.unite(overriddenDatesByUid.value(pe.uid));
+        expandRecurrences(ev, pe.rrule, exDates, mergedEvents);
+    }
+
+    for (const ParsedEvent& pe : recurringMastersNoUid) {
+        CalendarEvent ev;
+        ev.title = pe.summary.isEmpty() ? QStringLiteral("(No title)") : pe.summary;
+        ev.calendar = source;
+        ev.color = color;
+        ev.start = pe.start;
+        ev.end = pe.end;
+        ev.status = pe.status;
+        expandRecurrences(ev, pe.rrule, pe.exDates, mergedEvents);
+    }
+
+    for (const ParsedEvent& pe : singleEventsByUid)
+        appendParsedEvent(pe);
+    for (const ParsedEvent& pe : singleEventsNoUid)
+        appendParsedEvent(pe);
+    for (const ParsedEvent& pe : overridesByUidAndDate)
+        appendParsedEvent(pe);
+    for (const ParsedEvent& pe : overridesNoUid)
+        appendParsedEvent(pe);
 }
 
 QString localFeedPathFromInput(QString input) {

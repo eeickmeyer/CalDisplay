@@ -251,6 +251,7 @@ void expandRecurrences(
         CalendarEvent ev = base;
         ev.start = occ;
         ev.end   = occ.addSecs(durSecs);
+        ev.isRecurringExpansion = true;
         out->append(ev);
     };
 
@@ -368,6 +369,7 @@ void appendIcsEvents(const QByteArray& body,
         QSet<QDate> exDates;
         bool hasRecurrenceId = false;
         QDate recurrenceDate;
+        QDateTime recurrenceIdUtc;  // full UTC datetime of RECURRENCE-ID
         int sequence = 0;
         QDateTime lastModified;
     };
@@ -391,6 +393,8 @@ void appendIcsEvents(const QByteArray& body,
         ev.start = pe.start;
         ev.end = pe.end;
         ev.status = pe.status;
+        ev.uid = pe.uid;
+        ev.recurrenceIdUtcMs = pe.hasRecurrenceId ? pe.recurrenceIdUtc.toMSecsSinceEpoch() : 0;
         mergedEvents->append(ev);
     };
 
@@ -462,6 +466,7 @@ void appendIcsEvents(const QByteArray& body,
                     if (rid.isValid()) {
                         pe.hasRecurrenceId = true;
                         pe.recurrenceDate = rid.date();
+                        pe.recurrenceIdUtc = rid.toUTC();
                     }
                 }
 
@@ -569,6 +574,7 @@ void appendIcsEvents(const QByteArray& body,
         ev.start = pe.start;
         ev.end = pe.end;
         ev.status = pe.status;
+        ev.uid = pe.uid;  // propagated so post-processing dedup can match by uid
 
         QSet<QDate> exDates = pe.exDates;
         exDates.unite(overriddenDatesByUid.value(pe.uid));
@@ -583,6 +589,7 @@ void appendIcsEvents(const QByteArray& body,
         ev.start = pe.start;
         ev.end = pe.end;
         ev.status = pe.status;
+        // uid is empty — post-processing dedup skips these safely
         expandRecurrences(ev, pe.rrule, pe.exDates, mergedEvents);
     }
 
@@ -903,6 +910,50 @@ void FeedManager::refreshFeedsInternal(bool interactive) {
         for (const CalendarEvent& ev : *mergedEvents) {
             if (ev.end >= oldest && ev.start <= newest) {
                 filtered.append(ev);
+            }
+        }
+
+        // Layer 1: UTC-timestamp RECURRENCE-ID dedup (handles servers that
+        // correctly emit RECURRENCE-ID, robust across timezone boundaries).
+        {
+            QHash<QString, QSet<qint64>> overriddenUtcByUid;
+            for (const CalendarEvent& ev : filtered) {
+                if (ev.recurrenceIdUtcMs != 0 && !ev.uid.isEmpty())
+                    overriddenUtcByUid[ev.uid].insert(ev.recurrenceIdUtcMs);
+            }
+            if (!overriddenUtcByUid.isEmpty()) {
+                auto it = std::remove_if(filtered.begin(), filtered.end(),
+                    [&](const CalendarEvent& ev) {
+                        if (ev.recurrenceIdUtcMs != 0 || ev.uid.isEmpty())
+                            return false;
+                        auto found = overriddenUtcByUid.find(ev.uid);
+                        return found != overriddenUtcByUid.end() &&
+                               found->contains(ev.start.toUTC().toMSecsSinceEpoch());
+                    });
+                filtered.erase(it, filtered.end());
+            }
+        }
+
+        // Layer 2: UID + local-date dedup (handles servers that reschedule an
+        // occurrence by adding a new VEVENT without a RECURRENCE-ID property).
+        // If a UID has both an RRULE-expansion and a directly-specified VEVENT
+        // on the same calendar date, the directly-specified one wins.
+        {
+            QHash<QString, QSet<QDate>> directDatesByUid;
+            for (const CalendarEvent& ev : filtered) {
+                if (!ev.isRecurringExpansion && !ev.uid.isEmpty())
+                    directDatesByUid[ev.uid].insert(ev.start.date());
+            }
+            if (!directDatesByUid.isEmpty()) {
+                auto it = std::remove_if(filtered.begin(), filtered.end(),
+                    [&](const CalendarEvent& ev) {
+                        if (!ev.isRecurringExpansion || ev.uid.isEmpty())
+                            return false;
+                        auto found = directDatesByUid.find(ev.uid);
+                        return found != directDatesByUid.end() &&
+                               found->contains(ev.start.date());
+                    });
+                filtered.erase(it, filtered.end());
             }
         }
 

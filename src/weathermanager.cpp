@@ -442,6 +442,11 @@ void WeatherManager::refreshWeather() {
         return;
     }
 
+    // Clear the icon cache so icons are re-resolved from the icon theme on every refresh.
+    const QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                              + QStringLiteral("/weather-icons-color");
+    QDir(cacheRoot).removeRecursively();
+
     if (m_busy) {
         const QDateTime nowUtc = QDateTime::currentDateTimeUtc();
         const bool refreshTimedOut = !m_refreshStartedAtUtc.isValid()

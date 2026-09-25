@@ -34,7 +34,9 @@
 #include <QPixmap>
 #include <QDirIterator>
 #include <QImage>
+#include <QImageReader>
 #include <QPainter>
+#include <QSaveFile>
 #include <QSvgRenderer>
 
 #ifdef HAS_QT_POSITIONING
@@ -66,6 +68,26 @@ QString js(const QJsonObject& obj, const QString& key) {
     return obj.value(key).toString();
 }
 
+// Guards against zero-byte or partially-written cache entries (e.g. left behind
+// by a crash mid-write) that would otherwise be served forever and render blank.
+bool isValidCachedImage(const QString& path) {
+    QImageReader reader(path);
+    return reader.canRead() && !reader.size().isEmpty();
+}
+
+// Writes via a temp file + rename so a crash/kill mid-write can never leave a
+// corrupt file at the final cache path.
+bool savePngAtomically(const QImage& image, const QString& path) {
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly))
+        return false;
+    if (!image.save(&file, "PNG")) {
+        file.cancelWriting();
+        return false;
+    }
+    return file.commit();
+}
+
 QString renderSvgToCachedPng(const QString& svgPath, const QString& cachePath, int size) {
     if (svgPath.isEmpty() || cachePath.isEmpty() || size <= 0)
         return QString();
@@ -80,7 +102,7 @@ QString renderSvgToCachedPng(const QString& svgPath, const QString& cachePath, i
     renderer.render(&painter);
     painter.end();
 
-    if (image.save(cachePath, "PNG"))
+    if (savePngAtomically(image, cachePath))
         return QUrl::fromLocalFile(cachePath).toString();
 
     return QString();
@@ -199,7 +221,7 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
 
     QFileInfo cacheInfo(cachePath);
     if (cacheInfo.exists()) {
-        if (cacheInfo.size() > 0)
+        if (cacheInfo.size() > 0 && isValidCachedImage(cachePath))
             return QUrl::fromLocalFile(cachePath).toString();
         QFile::remove(cachePath);
     }
@@ -270,7 +292,7 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
     const QIcon icon = QIcon::fromTheme(iconName);
     if (!icon.isNull()) {
         const QPixmap pixmap = icon.pixmap(size, size);
-        if (!pixmap.isNull() && pixmap.save(cachePath, "PNG"))
+        if (!pixmap.isNull() && savePngAtomically(pixmap.toImage(), cachePath))
             return QUrl::fromLocalFile(cachePath).toString();
     }
 
@@ -441,11 +463,6 @@ void WeatherManager::refreshWeather() {
         setStatus(QStringLiteral("Configure a location in Settings."));
         return;
     }
-
-    // Clear the icon cache so icons are re-resolved from the icon theme on every refresh.
-    const QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
-                              + QStringLiteral("/weather-icons-color");
-    QDir(cacheRoot).removeRecursively();
 
     if (m_busy) {
         const QDateTime nowUtc = QDateTime::currentDateTimeUtc();

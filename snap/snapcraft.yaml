@@ -1,6 +1,6 @@
 name: caldisplay
 base: core24
-version: '1.2.3'
+version: '1.2.4'
 icon: assets/caldisplay.svg
 summary: Multi-view calendar, weather, and clock display system
 title: CalDisplay
@@ -60,6 +60,18 @@ parts:
     organize:
       usr/lib/x86_64-linux-gnu/libproxy/libpxbackend-1.0.so: usr/lib/x86_64-linux-gnu/libpxbackend-1.0.so
     prime:
+      # GPU userspace libraries come from the host via the opengl plug; the app
+      # renders with the software backend and doesn't need bundled copies.
+      - -usr/lib/**/dri
+      - -usr/lib/**/gbm
+      - -usr/lib/**/libdrm_amdgpu.so*
+      - -usr/lib/**/libdrm_intel.so*
+      - -usr/lib/**/libgallium-*.so*
+      - -usr/lib/**/libLLVM*.so*
+      - -usr/lib/**/libsensors.so*
+      - -usr/lib/**/libxcb-dri3.so*
+      - -usr/lib/**/libxcb-present.so*
+      - -usr/lib/**/libxshmfence.so*
       - -usr/lib/**/libEGL_mesa.so*
       - -usr/lib/**/libGLX_mesa.so*
       - -usr/lib/**/libXext.so*
@@ -118,6 +130,9 @@ apps:
       QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
       QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
       DBUS_FATAL_WARNINGS: "0"
+      # Don't inherit host style overrides (e.g. kvantum) that the snap does not ship.
+      QT_QUICK_CONTROLS_STYLE: Basic
+      QT_STYLE_OVERRIDE: Fusion
     plugs:
       - home
       - network
@@ -138,6 +153,9 @@ apps:
       QML2_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
       QML_IMPORT_PATH: $SNAP/usr/lib/x86_64-linux-gnu/qt6/qml
       DBUS_FATAL_WARNINGS: "0"
+      # Don't inherit host style overrides (e.g. kvantum) that the snap does not ship.
+      QT_QUICK_CONTROLS_STYLE: Basic
+      QT_STYLE_OVERRIDE: Fusion
     plugs:
       - home
       - network

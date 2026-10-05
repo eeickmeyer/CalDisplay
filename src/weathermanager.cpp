@@ -30,6 +30,7 @@
 #include <QUrlQuery>
 #include <QIcon>
 #include <QFile>
+#include <QHash>
 #include <QFileInfo>
 #include <QPixmap>
 #include <QDirIterator>
@@ -202,7 +203,8 @@ QString WeatherManager::settingsFilePath() {
     return weatherSettingsFilePath();
 }
 
-QString WeatherManager::iconPathForName(const QString& iconName, int size) {
+// Resolves an icon to a loadable URL, or an empty string if every lookup fails.
+static QString resolveIconPath(const QString& iconName, int size) {
     if (iconName.isEmpty() || size <= 0)
         return QString();
 
@@ -245,6 +247,7 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
         QStringLiteral("scalable/status"),
     };
     const QStringList exts = { QStringLiteral(".png"), QStringLiteral(".xpm"), QStringLiteral(".svg") };
+    QString svgFallback;
 
     for (const QString& root : roots) {
         for (const QString& rel : colorDirs) {
@@ -257,6 +260,9 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
                     const QString rendered = renderSvgToCachedPng(candidate, cachePath, size);
                     if (!rendered.isEmpty())
                         return rendered;
+                    // Cache dir unwritable/full: let QML render the SVG itself.
+                    if (svgFallback.isEmpty())
+                        svgFallback = QUrl::fromLocalFile(candidate).toString();
                     continue;
                 }
                 return QUrl::fromLocalFile(candidate).toString();
@@ -282,6 +288,8 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
                 const QString rendered = renderSvgToCachedPng(candidate, cachePath, size);
                 if (!rendered.isEmpty())
                     return rendered;
+                if (svgFallback.isEmpty())
+                    svgFallback = QUrl::fromLocalFile(candidate).toString();
                 continue;
             }
             return QUrl::fromLocalFile(candidate).toString();
@@ -296,6 +304,25 @@ QString WeatherManager::iconPathForName(const QString& iconName, int size) {
             return QUrl::fromLocalFile(cachePath).toString();
     }
 
+    return svgFallback;
+}
+
+QString WeatherManager::iconPathForName(const QString& iconName, int size) {
+    // Remember the last working URL per icon so a transient lookup/cache failure
+    // (or a cache file removed behind our back) never blanks an icon that was
+    // displayed fine before.
+    static QHash<QString, QString> lastGood;
+    const QString key = iconName + QLatin1Char('@') + QString::number(size);
+
+    QString path = resolveIconPath(iconName, size);
+    if (!path.isEmpty()) {
+        lastGood.insert(key, path);
+        return path;
+    }
+
+    const QString previous = lastGood.value(key);
+    if (!previous.isEmpty() && QFileInfo::exists(QUrl(previous).toLocalFile()))
+        return previous;
     return QString();
 }
 

@@ -1613,8 +1613,8 @@ Window {
                             }
                             RowLayout {
                                 spacing: 8
-                                Image {
-                                    source: weatherManager.currentWeather.iconPath || ""
+                                WeatherIcon {
+                                    iconSource: weatherManager.currentWeather.iconPath || ""
                                     sourceSize.width: 52; sourceSize.height: 52
                                     fillMode: Image.PreserveAspectFit
                                     Layout.preferredWidth: 52; Layout.preferredHeight: 52
@@ -1661,8 +1661,8 @@ Window {
                                 delegate: RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
                                     Text { text: modelData.timeText; color: root.ncSubtleText; font.pixelSize: 16; Layout.preferredWidth: 54 }
-                                    Image {
-                                        source: modelData.iconPath || ""
+                                    WeatherIcon {
+                                        iconSource: modelData.iconPath || ""
                                         sourceSize.width: 22; sourceSize.height: 22
                                         fillMode: Image.PreserveAspectFit
                                         Layout.preferredWidth: 22; Layout.preferredHeight: 22
@@ -1728,9 +1728,9 @@ Window {
                                                 Layout.preferredWidth: 24
                                                 Layout.preferredHeight: 24
 
-                                                Image {
+                                                WeatherIcon {
                                                     anchors.fill: parent
-                                                    source: modelData.iconPath || ""
+                                                    iconSource: modelData.iconPath || ""
                                                     sourceSize.width: 24
                                                     sourceSize.height: 24
                                                     fillMode: Image.PreserveAspectFit
@@ -1811,8 +1811,8 @@ Window {
                                         Layout.minimumWidth: 110
                                         elide: Text.ElideRight
                                     }
-                                    Image {
-                                        source: modelData.iconPath || ""
+                                    WeatherIcon {
+                                        iconSource: modelData.iconPath || ""
                                         sourceSize.width: dailyForecastPanel.iconSize
                                         sourceSize.height: dailyForecastPanel.iconSize
                                         fillMode: Image.PreserveAspectFit

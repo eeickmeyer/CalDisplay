@@ -51,6 +51,12 @@ Notes:
 - Parser support currently focuses on VEVENT fields: `SUMMARY`, `DTSTART`, `DTEND`, and `STATUS`.
 - Events are filtered to a display window from the start of the previous month through 365 days ahead.
 
+## Tab Cycling
+
+Settings > Calendar has an **Auto-cycle tabs** switch and a **View cycle** interval (5–300 seconds, default 20). Both are saved to the settings file and apply to kiosk mode too, so configure them once in windowed mode.
+
+With auto-cycle off, kiosk mode stays on the current tab. Switch tabs manually by touching/clicking a tab, or with the Left/Right (or PgUp/PgDown) keys.
+
 ## Snap Build and Install
 
 Build:

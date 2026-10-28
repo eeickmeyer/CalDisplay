@@ -28,6 +28,8 @@ class FeedManager : public QObject {
     Q_PROPERTY(bool sundayFirst READ sundayFirst WRITE setSundayFirst NOTIFY sundayFirstChanged)
     Q_PROPERTY(QString displayName READ displayName WRITE setDisplayName NOTIFY displayNameChanged)
     Q_PROPERTY(QString visibleViews READ visibleViews WRITE setVisibleViews NOTIFY visibleViewsChanged)
+    Q_PROPERTY(int viewCycleSecs READ viewCycleSecs WRITE setViewCycleSecs NOTIFY viewCycleSecsChanged)
+    Q_PROPERTY(bool autoCycleEnabled READ autoCycleEnabled WRITE setAutoCycleEnabled NOTIFY autoCycleEnabledChanged)
 
 public:
     explicit FeedManager(EventModel* eventModel, QObject* parent = nullptr);
@@ -42,6 +44,8 @@ public:
     bool sundayFirst() const;
     QString displayName() const;
     QString visibleViews() const;
+    int viewCycleSecs() const;
+    bool autoCycleEnabled() const;
 
     void setFeedUrls(const QString& value);
     void setAutoRefreshEnabled(bool value);
@@ -50,6 +54,8 @@ public:
     void setSundayFirst(bool value);
     void setDisplayName(const QString& value);
     void setVisibleViews(const QString& value);
+    void setViewCycleSecs(int value);
+    void setAutoCycleEnabled(bool value);
 
     Q_INVOKABLE void saveSettings();
     Q_INVOKABLE void refreshFeeds();
@@ -67,6 +73,8 @@ signals:
     void sundayFirstChanged();
     void displayNameChanged();
     void visibleViewsChanged();
+    void viewCycleSecsChanged();
+    void autoCycleEnabledChanged();
 
 private:
     QString m_feedUrls;
@@ -79,6 +87,8 @@ private:
     bool m_sundayFirst = false;
     QString m_displayName = QStringLiteral("Family Calendar");
     QString m_visibleViews = QStringLiteral("day,week,month,twomonths,weather");
+    int m_viewCycleSecs = 20;
+    bool m_autoCycleEnabled = true;
     QTimer m_autoRefreshTimer;
 
     EventModel* m_eventModel;

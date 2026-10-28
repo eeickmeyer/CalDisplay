@@ -59,7 +59,8 @@ Window {
 
     // ── View cycling ──────────────────────────────────────────────
     property int  currentView:   0      // stack index: 0=Day, 1=Week, 2=Month, 3=Two Months, 4=Weather
-    property int  viewCycleSecs: 20
+    readonly property int  viewCycleSecs: feedManager.viewCycleSecs
+    readonly property bool autoCycle: feedManager.autoCycleEnabled
     property real cycleProgress: 0.0
     property var  allEvents:     []
     readonly property var allViewDefs: [
@@ -281,7 +282,23 @@ Window {
 
     function startCycle() {
         cycleProgress = 0
-        progressAnim.restart()
+        if (root.autoCycle)
+            progressAnim.restart()
+        else
+            progressAnim.stop()
+    }
+
+    function stepView(delta) {
+        var n = root.activeViews.length
+        if (n < 2)
+            return
+        var pos = -1
+        for (var i = 0; i < n; i++) {
+            if (root.activeViews[i].index === root.currentView) { pos = i; break }
+        }
+        root.currentView = root.activeViews[((pos < 0 ? 0 : pos) + delta + n) % n].index
+        viewCycleTimer.restart()
+        root.startCycle()
     }
 
     function isSameDate(a, b) {
@@ -653,7 +670,7 @@ Window {
     Timer {
         id: viewCycleTimer
         interval: root.viewCycleSecs * 1000
-        running: !root.setupOpen && root.activeViews.length > 1; repeat: true
+        running: root.autoCycle && !root.setupOpen && root.activeViews.length > 1; repeat: true
         onTriggered: {
             var next = root.nextEnabledViewIndex(root.currentView)
             root.currentView = next
@@ -670,6 +687,11 @@ Window {
         duration: root.viewCycleSecs * 1000
         easing.type: Easing.InOutQuad
     }
+
+    Shortcut { sequence: "Right"; enabled: !root.setupOpen; onActivated: root.stepView(1) }
+    Shortcut { sequence: "Left"; enabled: !root.setupOpen; onActivated: root.stepView(-1) }
+    Shortcut { sequence: "PgDown"; enabled: !root.setupOpen; onActivated: root.stepView(1) }
+    Shortcut { sequence: "PgUp"; enabled: !root.setupOpen; onActivated: root.stepView(-1) }
 
     NumberAnimation {
         id: progressAnim
@@ -751,8 +773,8 @@ Window {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: root.activeViews.length > 1 ? 3 : 0
-                visible: root.activeViews.length > 1
+                Layout.preferredHeight: root.autoCycle && root.activeViews.length > 1 ? 3 : 0
+                visible: root.autoCycle && root.activeViews.length > 1
                 height: 3; color: root.ncPanelAlt; radius: 1
                 Rectangle {
                     width: parent.width * root.cycleProgress; height: parent.height
@@ -2141,10 +2163,31 @@ Window {
 
                             RowLayout {
                                 Layout.fillWidth: true; spacing: 10
-                                Label { text: "View cycle"; color: root.ncText }
+                                Label { text: "Auto-cycle tabs"; color: root.ncText }
+                                Switch {
+                                    checked: feedManager.autoCycleEnabled
+                                    onToggled: {
+                                        feedManager.autoCycleEnabled = checked
+                                        feedManager.saveSettings()
+                                        viewCycleTimer.restart()
+                                        root.startCycle()
+                                    }
+                                }
+                                Item { Layout.fillWidth: true }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 10
+                                Label { text: "View cycle"; color: root.ncText; opacity: feedManager.autoCycleEnabled ? 1.0 : 0.5 }
                                 SpinBox {
-                                    from: 5; to: 300; value: root.viewCycleSecs; editable: true
-                                    onValueModified: { root.viewCycleSecs = value; viewCycleTimer.restart(); root.startCycle() }
+                                    from: 5; to: 300; value: feedManager.viewCycleSecs; editable: true
+                                    enabled: feedManager.autoCycleEnabled
+                                    onValueModified: {
+                                        feedManager.viewCycleSecs = value
+                                        feedManager.saveSettings()
+                                        viewCycleTimer.restart()
+                                        root.startCycle()
+                                    }
                                 }
                                 Label { text: "sec"; color: root.ncText }
                                 Item { Layout.fillWidth: true }

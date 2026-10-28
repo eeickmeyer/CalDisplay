@@ -726,6 +726,8 @@ int FeedManager::timeFormatPreference() const { return m_timeFormatPreference; }
 bool FeedManager::sundayFirst() const { return m_sundayFirst; }
 QString FeedManager::displayName() const { return m_displayName; }
 QString FeedManager::visibleViews() const { return m_visibleViews; }
+int FeedManager::viewCycleSecs() const { return m_viewCycleSecs; }
+bool FeedManager::autoCycleEnabled() const { return m_autoCycleEnabled; }
 
 QString FeedManager::lastSync() const {
     if (!m_lastSync.isValid()) {
@@ -796,6 +798,23 @@ void FeedManager::setVisibleViews(const QString& value) {
     emit visibleViewsChanged();
 }
 
+void FeedManager::setViewCycleSecs(int value) {
+    const int clamped = std::clamp(value, 5, 300);
+    if (m_viewCycleSecs == clamped) {
+        return;
+    }
+    m_viewCycleSecs = clamped;
+    emit viewCycleSecsChanged();
+}
+
+void FeedManager::setAutoCycleEnabled(bool value) {
+    if (m_autoCycleEnabled == value) {
+        return;
+    }
+    m_autoCycleEnabled = value;
+    emit autoCycleEnabledChanged();
+}
+
 void FeedManager::saveSettings() {
     const QString filePath = settingsFilePath();
     QDir().mkpath(QFileInfo(filePath).absolutePath());
@@ -807,6 +826,8 @@ void FeedManager::saveSettings() {
     settings.setValue("readonly/sundayFirst", m_sundayFirst);
     settings.setValue("readonly/displayName", m_displayName);
     settings.setValue("readonly/visibleViews", m_visibleViews);
+    settings.setValue("readonly/viewCycleSecs", m_viewCycleSecs);
+    settings.setValue("readonly/autoCycleEnabled", m_autoCycleEnabled);
     settings.sync();
     setStatusMessage(QStringLiteral("Settings saved."));
 }
@@ -1092,6 +1113,8 @@ void FeedManager::loadSettings() {
     m_displayName = settings.value("readonly/displayName", QStringLiteral("Family Calendar")).toString().trimmed();
     m_visibleViews = normalizeVisibleViews(
         settings.value("readonly/visibleViews", QStringLiteral("day,week,month,twomonths,weather")).toString());
+    m_viewCycleSecs = std::clamp(settings.value("readonly/viewCycleSecs", 20).toInt(), 5, 300);
+    m_autoCycleEnabled = settings.value("readonly/autoCycleEnabled", true).toBool();
     if (m_displayName.isEmpty()) {
         m_displayName = QStringLiteral("Family Calendar");
     }
@@ -1103,6 +1126,8 @@ void FeedManager::loadSettings() {
     emit sundayFirstChanged();
     emit displayNameChanged();
     emit visibleViewsChanged();
+    emit viewCycleSecsChanged();
+    emit autoCycleEnabledChanged();
 
     setStatusMessage("Add shared ICS links.");
     updateAutoRefreshTimer();
